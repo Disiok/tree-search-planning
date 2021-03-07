@@ -463,6 +463,8 @@ def Trainer(
     set_seed(seed)
     env = gym.make(config.env_name)
     net = MLP(env, config).to(device)
+    if state_dict is not None:
+        net.load_state_dict(state_dict)
 
     optimizer = torch.optim.SGD(net.parameters(), lr=config.lr)
     replay_buffer = ReplayBuffer(config.buffer_size)
