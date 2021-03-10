@@ -265,9 +265,9 @@ class Trainer:
             priorities,
             # For log purpose
             loss.item(),
-            value_loss.mean().item(),
-            reward_loss.mean().item(),
-            policy_loss.mean().item(),
+            value_loss.mean().item() if torch.is_tensor(value_loss) else 0.,
+            reward_loss.mean().item() if torch.is_tensor(reward_loss) else 0.,
+            policy_loss.mean().item() if torch.is_tensor(policy_loss) else 0.,
         )
 
     def update_lr(self):
