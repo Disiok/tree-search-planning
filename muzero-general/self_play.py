@@ -654,12 +654,15 @@ class AZMCTS(MCTS):
             assert set(legal_actions).issubset(
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
+
+            # hidden_state = (environment state, is_terminal)
+            hidden_state = (game.env.simplify(), False)
             root.expand(
                 legal_actions,
                 to_play,
                 0.,  # no rewards at the root node
                 policy_logits,
-                None,  # no hidden state
+                hidden_state,  # hidden state of the game
             )
 
         if add_exploration_noise:
@@ -673,7 +676,6 @@ class AZMCTS(MCTS):
         max_tree_depth = 0
         for _ in range(self.config.num_simulations):
             node = root
-            state = safe_deepcopy_env(game.env)
 
             terminal = False
             search_path = [node]
@@ -683,8 +685,8 @@ class AZMCTS(MCTS):
             while node.expanded() and not terminal:
                 current_tree_depth += 1
                 action, node = self.select_child(node, min_max_stats)
-                observation, reward, terminal, _ = state.step(action)
-                observation = game.reshape_obs(observation)
+                if node.expanded():
+                    _, terminal = node.hidden_state
                 search_path.append(node)
 
                 # Players play turn by turn
@@ -694,6 +696,11 @@ class AZMCTS(MCTS):
                     virtual_to_play = self.config.players[0]
 
             if not terminal:
+                state, _ = search_path[-2].hidden_state
+                next_state = safe_deepcopy_env(state)
+                observation, reward, terminal, _ = next_state.step(action)
+                next_hidden_state = (next_state, terminal)
+
                 observation = (
                     torch.tensor(observation)
                     .float()
@@ -707,7 +714,7 @@ class AZMCTS(MCTS):
                     virtual_to_play,
                     reward,  # reward of action leading to this node
                     policy_logits,
-                    None,  # no hidden state
+                    next_hidden_state,  # new hidden state
                 )
             else:
                 value = 0.  # terminal states have no value
