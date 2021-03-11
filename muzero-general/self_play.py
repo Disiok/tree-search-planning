@@ -142,12 +142,11 @@ class SelfPlay:
                     self.config.stacked_observations,
                 )
 
-                # initialize root node
-                next_root = None
-
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
                     if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                        # NOTE: We do not re-use past sub-trees for now since states are simplified
+                        # by highway-env for tractability. We should look into this later.
                         root, mcts_info = AZMCTS(self.config).run(
                             self.model,
                             self.game,
@@ -155,7 +154,6 @@ class SelfPlay:
                             self.game.legal_actions(),
                             self.game.to_play(),
                             True,
-                            override_root_with=next_root,
                         )
                     else:
                         root, mcts_info = MCTS(self.config).run(
@@ -185,10 +183,6 @@ class SelfPlay:
                     )
 
                 observation, reward, done = self.game.step(action)
-
-                # re-use tree if one-play game
-                if opponent == "self":
-                    next_root = root.children[action]
 
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
@@ -655,7 +649,7 @@ class AZMCTS(MCTS):
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
 
-            # hidden_state = (environment state, is_terminal)
+            # TODO(kwong): This works for highway-env only.
             hidden_state = (game.env.simplify(), False)
             root.expand(
                 legal_actions,
