@@ -1,0 +1,13 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=32
+#SBATCH -J muzero-gputrain-test            # Job Name.
+#SBATCH --mem=10GB                          # Job Memory.
+#SBATCH -p gpu
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -o /h/suo/experiments/%J.out             # Where to save the output.
+#SBATCH --mail-user=suo@cs.toronto.edu
+#SBATCH --mail-type=ALL
+cd /h/$USER/dev/tree-search-planning/muzero-general
+source ../project-suo.env
+python muzero.py highway_env_az
