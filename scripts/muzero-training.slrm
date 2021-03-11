@@ -12,7 +12,7 @@
 echo Running on $(hostname)
 source /h/kelvin/.bashrc
 
-. /h/kelvin/envs/base.env
+. /h/kelvin/envs/cuda11.env
 conda activate tsmp
 
 cd /h/kelvin/projects/mcts_planner/tree-search-planning/muzero-general
