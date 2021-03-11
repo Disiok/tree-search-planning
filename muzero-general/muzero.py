@@ -88,7 +88,7 @@ class MuZero:
         if 1 < self.num_gpus:
             self.num_gpus = math.floor(self.num_gpus)
 
-        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(_temp_dir='/scratch/ssd001/home/kelvin/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
