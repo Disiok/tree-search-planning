@@ -84,10 +84,20 @@ class MuZero:
             )
         else:
             total_gpus = 0
+
+        # NOTE(sergio): looks like `split_resources_in` is only used for parallel experiments for hyperparameter search purposes
         self.num_gpus = total_gpus / split_resources_in
         if 1 < self.num_gpus:
             self.num_gpus = math.floor(self.num_gpus)
 
+        # NOTE(sergio): Ray be able to utilize all cores unless otherwise specified.
+        # NOTE(sergio): seems like the current `init` call is for a single node.
+        #               Hopefully sufficient for the highway-env setting? 
+        #               Should be easy to change to multiple nodes as well if Vector supports it.
+        #               Although perhaps other parts of the code should be change, as they use DataParallel? Not sure.
+        # NOTE(sergio): By default, num_cpus is set based on virtual cores.
+        # TODO(sergio): make this ray dir configurable from the game config.
+        print('Initializing Ray')
         ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
 
         # Checkpoint and replay buffer used to initialize workers
@@ -112,6 +122,13 @@ class MuZero:
         }
         self.replay_buffer = {}
 
+        # NOTE(sergio): I am a bit confused with the purpose of CPUActor. 
+        #               It looks like it is not used anywhere else in the codebase, and the object ref is lost after this point
+        #               If it is only to get the initial weights, why do we need a ray remote actor/function for that?
+        #               Is this just a way to guarantee we get the same weights across all workers?
+        #               This would only be true if Ray operates similarly to Horovod, and we are actually kicking off 1 training process per worker,
+        #               although this was not my impression
+        print('Initializing CPUActor')
         cpu_actor = CPUActor.remote()
         cpu_weights = cpu_actor.get_initial_weights.remote(self.config)
         self.checkpoint["weights"], self.summary = copy.deepcopy(ray.get(cpu_weights))
@@ -136,6 +153,8 @@ class MuZero:
 
         # Manage GPUs
         if 0 < self.num_gpus:
+            # NOTE(sergio): is it reasonable to keep self-play in CPU for small models? Seems like it's the case by default (given game defs)
+            # NOTE(sergio): Why does it need a GPU for tensorboard logging?
             num_gpus_per_worker = self.num_gpus / (
                 self.config.train_on_gpu
                 + self.config.num_workers * self.config.selfplay_on_gpu
@@ -148,6 +167,7 @@ class MuZero:
             num_gpus_per_worker = 0
 
         # Initialize workers
+        print('Initializing training workers')
         self.training_worker = trainer.Trainer.options(
             num_cpus=0, num_gpus=num_gpus_per_worker if self.config.train_on_gpu else 0,
         ).remote(self.checkpoint, self.config)
@@ -167,6 +187,7 @@ class MuZero:
                 num_gpus=num_gpus_per_worker if self.config.reanalyse_on_gpu else 0,
             ).remote(self.checkpoint, self.config)
 
+        print('Initializing self-play workers')
         self.self_play_workers = [
             self_play.SelfPlay.options(
                 num_cpus=0,
@@ -178,6 +199,8 @@ class MuZero:
         ]
 
         # Launch workers
+        # NOTE(sergio): why is a list comprehension used here?
+        print('Launching continuous self-play')
         [
             self_play_worker.continuous_self_play.remote(
                 self.shared_storage_worker, self.replay_buffer_worker
@@ -193,6 +216,7 @@ class MuZero:
             )
 
         if log_in_tensorboard:
+            print('Initializing tensorboard logging')
             self.logging_loop(
                 num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             )
@@ -299,9 +323,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}',
-                    end="\r",
-                )
+                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
                 counter += 1
                 time.sleep(0.5)
         except KeyboardInterrupt:
@@ -594,6 +616,7 @@ def load_model_menu(muzero, game_name):
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         # Train directly with "python muzero.py cartpole"
+        print(f'Training kicked off for environment {sys.argv[1]}')
         muzero = MuZero(sys.argv[1])
         muzero.train()
     else:
