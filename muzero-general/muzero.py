@@ -92,13 +92,13 @@ class MuZero:
 
         # NOTE(sergio): Ray be able to utilize all cores unless otherwise specified.
         # NOTE(sergio): seems like the current `init` call is for a single node.
-        #               Hopefully sufficient for the highway-env setting? 
+        #               Hopefully sufficient for the highway-env setting?
         #               Should be easy to change to multiple nodes as well if Vector supports it.
         #               Although perhaps other parts of the code should be change, as they use DataParallel? Not sure.
         # NOTE(sergio): By default, num_cpus is set based on virtual cores.
         # TODO(sergio): make this ray dir configurable from the game config.
         print('Initializing Ray')
-        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(_temp_dir='/scratch/ssd001/home/kelvin/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -122,7 +122,7 @@ class MuZero:
         }
         self.replay_buffer = {}
 
-        # NOTE(sergio): I am a bit confused with the purpose of CPUActor. 
+        # NOTE(sergio): I am a bit confused with the purpose of CPUActor.
         #               It looks like it is not used anywhere else in the codebase, and the object ref is lost after this point
         #               If it is only to get the initial weights, why do we need a ray remote actor/function for that?
         #               Is this just a way to guarantee we get the same weights across all workers?
@@ -217,10 +217,11 @@ class MuZero:
 
         if log_in_tensorboard:
             print('Initializing tensorboard logging')
-            self.logging_loop(
-                num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+            self.logging_loop.remote(
+                self, num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             )
 
+    @ray.remote
     def logging_loop(self, num_gpus):
         """
         Keep track of the training performance.
@@ -521,7 +522,7 @@ def hyperparameter_search(
                 print(f"Launching new experiment: {param.value}")
                 muzero = MuZero(game_name, param.value, parallel_experiments)
                 muzero.param = param
-                muzero.train(False)
+                muzero.train(True)
                 running_experiments.append(muzero)
                 budget -= 1
 
@@ -547,7 +548,7 @@ def hyperparameter_search(
                         print(f"Launching new experiment: {param.value}")
                         muzero = MuZero(game_name, param.value, parallel_experiments)
                         muzero.param = param
-                        muzero.train(False)
+                        muzero.train(True)
                         running_experiments[i] = muzero
                         budget -= 1
                     else:
@@ -620,85 +621,34 @@ if __name__ == "__main__":
         muzero = MuZero(sys.argv[1])
         muzero.train()
     else:
-        print("\nWelcome to MuZero! Here's a list of games:")
-        # Let user pick a game
-        games = [
-            filename[:-3]
-            for filename in sorted(
-                os.listdir(os.path.dirname(os.path.realpath(__file__)) + "/games")
-            )
-            if filename.endswith(".py") and filename != "abstract_game.py"
-        ]
-        for i in range(len(games)):
-            print(f"{i}. {games[i]}")
-        choice = input("Enter a number to choose the game: ")
-        valid_inputs = [str(i) for i in range(len(games))]
-        while choice not in valid_inputs:
-            choice = input("Invalid input, enter a number listed above: ")
-
         # Initialize MuZero
-        choice = int(choice)
-        game_name = games[choice]
+        game_name = "highway_env"
         muzero = MuZero(game_name)
 
-        while True:
-            # Configure running options
-            options = [
-                "Train",
-                "Load pretrained model",
-                "Diagnose model",
-                "Render some self play games",
-                "Play against MuZero",
-                "Test the game manually",
-                "Hyperparameter search",
-                "Exit",
-            ]
-            print()
-            for i in range(len(options)):
-                print(f"{i}. {options[i]}")
+        # Define here the parameters to tune
+        # Parametrization documentation: https://facebookresearch.github.io/nevergrad/parametrization.html
+        muzero.terminate_workers()
+        del muzero
+        budget = 100
+        parallel_experiments = 10
+        lr_init = nevergrad.p.Log(lower=0.0001, upper=0.1)
+        discount = nevergrad.p.Log(lower=0.95, upper=0.9999)
+        td_steps = nevergrad.p.Choice(list(range(20)))
+        per_alpha = nevergrad.p.Scalar(lower=0, upper=1)
+        value_loss_weight = nevergrad.p.Log(lower=0.1, upper=1.0)
+        parametrization = nevergrad.p.Dict(
+            lr_init=lr_init,
+            discount=discount,
+            td_steps=td_steps,
+            per_alpha=per_alpha,
+            value_loss_weight=value_loss_weight,
+        )
 
-            choice = input("Enter a number to choose an action: ")
-            valid_inputs = [str(i) for i in range(len(options))]
-            while choice not in valid_inputs:
-                choice = input("Invalid input, enter a number listed above: ")
-            choice = int(choice)
-            if choice == 0:
-                muzero.train()
-            elif choice == 1:
-                load_model_menu(muzero, game_name)
-            elif choice == 2:
-                muzero.diagnose_model(30)
-            elif choice == 3:
-                muzero.test(render=True, opponent="self", muzero_player=None)
-            elif choice == 4:
-                muzero.test(render=True, opponent="human", muzero_player=0)
-            elif choice == 5:
-                env = muzero.Game()
-                env.reset()
-                env.render()
-
-                done = False
-                while not done:
-                    action = env.human_to_action()
-                    observation, reward, done = env.step(action)
-                    print(f"\nAction: {env.action_to_string(action)}\nReward: {reward}")
-                    env.render()
-            elif choice == 6:
-                # Define here the parameters to tune
-                # Parametrization documentation: https://facebookresearch.github.io/nevergrad/parametrization.html
-                muzero.terminate_workers()
-                del muzero
-                budget = 20
-                parallel_experiments = 2
-                lr_init = nevergrad.p.Log(a_min=0.0001, a_max=0.1)
-                discount = nevergrad.p.Log(lower=0.95, upper=0.9999)
-                parametrization = nevergrad.p.Dict(lr_init=lr_init, discount=discount)
-                best_hyperparameters = hyperparameter_search(
-                    game_name, parametrization, budget, parallel_experiments, 20
-                )
-                muzero = MuZero(game_name, best_hyperparameters)
-            else:
-                break
-            print("\nDone")
+        print("Searching hyperparameters")
+        best_hyperparameters = hyperparameter_search(
+            game_name, parametrization, budget, parallel_experiments, 20
+        )
+        muzero = MuZero(game_name, best_hyperparameters)
+        print("\nDone")
 
     ray.shutdown()
