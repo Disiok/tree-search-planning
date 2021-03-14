@@ -165,6 +165,8 @@ class MuZero:
                 num_gpus_per_worker = math.floor(num_gpus_per_worker)
         else:
             num_gpus_per_worker = 0
+        
+        print(f'Using {num_gpus_per_worker} gpus per worker')
 
         # Initialize workers
         print('Initializing training workers')
@@ -220,6 +222,9 @@ class MuZero:
             self.logging_loop(
                 num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             )
+
+        # NOTE(suo): Force print
+        sys.stdout.flush()
 
     def logging_loop(self, num_gpus):
         """
