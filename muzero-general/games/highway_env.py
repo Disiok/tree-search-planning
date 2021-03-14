@@ -77,7 +77,7 @@ class MuZeroConfig:
         ### Training
         self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 10000  # Total number of training steps (ie weights update according to a batch)
+        self.training_steps = 500000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 128  # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
@@ -95,9 +95,9 @@ class MuZeroConfig:
 
 
         ### Replay Buffer
-        self.replay_buffer_size = 500  # Number of self-play games to keep in the replay buffer
+        self.replay_buffer_size = int(1e6)  # Number of self-play games to keep in the replay buffer
         self.num_unroll_steps = 10  # Number of game moves to keep for every batch element
-        self.td_steps = 50  # Number of steps in the future to take into account for calculating the target value
+        self.td_steps = 10  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
         self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
 
@@ -232,7 +232,7 @@ class Game(AbstractGame):
         Display the game observation.
         """
         self.env.render()
-        inumpyut("Press enter to take a step ")
+        input("Press enter to take a step ")
 
     def action_to_string(self, action_number):
         """
