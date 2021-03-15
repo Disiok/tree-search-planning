@@ -97,8 +97,9 @@ class MuZero:
         #               Although perhaps other parts of the code should be change, as they use DataParallel? Not sure.
         # NOTE(sergio): By default, num_cpus is set based on virtual cores.
         # TODO(sergio): make this ray dir configurable from the game config.
+        # NOTE(suo): Expose dashboard to all interfaces for remote access
         print('Initializing Ray')
-        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True, dashboard_host="0.0.0.0")
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -244,7 +245,7 @@ class MuZero:
         )
 
         # Write everything in TensorBoard
-        writer = SummaryWriter(self.config.results_path)
+        writer = SummaryWriter(self.config.results_path, flush_secs=30)
 
         print(
             "\nTraining...\nRun tensorboard --logdir ./results and go to http://localhost:6006/ to see in real time the training performance.\n"
