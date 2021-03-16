@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --ntasks=1                         # Number of workers.
 #SBATCH --cpus-per-task=32
-#SBATCH -J muzero-gputrain-test            # Job Name.
+#SBATCH -J suo-muzero-exp            # Job Name.
 #SBATCH --mem=12GB                          # Job Memory.
 #SBATCH -p gpu
 #SBATCH --gres=gpu:2                       # Number of GPUs.

@@ -33,4 +33,7 @@ echo ipnport=$ipnport
 ipnip=$(hostname -i)
 echo ipnip=$ipnip
 
-tensorboard --logdir="${MODEL_DIR}" --port=$ipnport
+export TMPDIR=/tmp/$USER
+mkdir -p $TMPDIR
+
+tensorboard --logdir="${MODEL_DIR}" --port=$ipnport --bind_all

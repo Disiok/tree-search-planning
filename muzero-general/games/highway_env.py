@@ -35,7 +35,7 @@ class MuZeroConfig:
         self.num_workers = 16  # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 500  # Maximum number of moves if game is not finished before
-        self.num_simulations = 50  # Number of future moves self-simulated
+        self.num_simulations = 100  # Number of future moves self-simulated
         self.discount = 0.997  # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
 
@@ -147,7 +147,7 @@ class Game(AbstractGame):
                     'type': 'Kinematics',
                     'vehicles_count': 5,
                     'features': ['presence', 'x', 'y', 'vx', 'vy', 'cos_h', 'sin_h'],
-                    'normalized': False,
+                    'normalized': True,
                     'features_range': {
                         'x': [-100, 100],
                         'y': [-100, 100],
