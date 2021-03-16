@@ -48,10 +48,9 @@ class MuZeroConfig:
         self.pb_c_init = 1.25
 
 
-
         ### Network
         self.network = "fullyconnected"  # "resnet" / "fullyconnected"
-        self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
+        self.support_size = 100  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
         
         # Residual Network
         self.downsample = False  # Downsample observations before representation network, False / "CNN" (lighter) / "resnet" (See paper appendix Network Architecture)
@@ -65,17 +64,21 @@ class MuZeroConfig:
         self.resnet_fc_policy_layers = []  # Define the hidden layers in the policy head of the prediction network
 
         # Fully Connected Network
-        self.encoding_size = 8
+        self.encoding_size = 64
         self.fc_representation_layers = []  # Define the hidden layers in the representation network
-        self.fc_dynamics_layers = [16]  # Define the hidden layers in the dynamics network
-        self.fc_reward_layers = [16]  # Define the hidden layers in the reward network
-        self.fc_value_layers = [16]  # Define the hidden layers in the value network
-        self.fc_policy_layers = [16]  # Define the hidden layers in the policy network
-
+        self.fc_dynamics_layers = [64]  # Define the hidden layers in the dynamics network
+        self.fc_reward_layers = [64]  # Define the hidden layers in the reward network
+        self.fc_value_layers = [64]  # Define the hidden layers in the value network
+        self.fc_policy_layers = [64]  # Define the hidden layers in the policy network
 
 
         ### Training
-        self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
+        # self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
+        self.exp_name = 'default'
+        self.results_path = os.path.join('/scratch/gobi1/suo/experiments/tree-search-planning', 
+                                         os.path.basename(__file__)[:-3], 
+                                         self.exp_name, 
+                                         datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 500000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 256  # Number of parts of games to train on at each training step
@@ -106,7 +109,6 @@ class MuZeroConfig:
         self.reanalyse_on_gpu = False
 
 
-
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
         self.training_delay = 0  # Number of seconds to wait after each training step
@@ -129,6 +131,7 @@ class MuZeroConfig:
             return 0.5
         else:
             return 0.25
+        # return 0.35
 
 
 class Game(AbstractGame):
@@ -167,7 +170,9 @@ class Game(AbstractGame):
                 'offscreen_rendering': False,
                 'manual_control': False,
                 'real_time_rendering': False,
-                'lanes_count': 4,
+                # NOTE(suo): Make environment simpler to solve
+                # 'lanes_count': 4,
+                'lanes_count': 2,
                 'controlled_vehicles': 1,
                 'initial_lane_id': None,
                 'duration': 40,

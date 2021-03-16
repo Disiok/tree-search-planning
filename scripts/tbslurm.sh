@@ -4,7 +4,7 @@
 #SBATCH -J  tensorboard_server    # name
 #SBATCH -t 180:00:00               # max runtime is 180 hours (9 days)
 #SBATCH --mem=6GB
-#SBATCH -p cpu
+#SBATCH -p gpu 
 #SBATCH -o /h/suo/tbslurm/tb-%J.out # TODO: Where to save your output
 
 # INSTRUCTIONS
@@ -20,11 +20,14 @@
 # ssh -L PORT:IPADDR:PORT spitis@q.vectorinstitute.ai
 
 source /h/suo/.bashrc #TODO: Your profile
+conda activate treesearch
+
 # source activate tfcpu #TODO: Your local cpu environment (with cpu tensorboard, until ops installs cuda on CPU only machines)
 # MODEL_DIR=/scratch/gobi2/pitchan/her_results/protoge/slide #TODO: Your TF model directory
-MODEL_DIR=/h/suo/dev/tree-search-planning/muzero-gneral/results #TODO: Your TF model directory
+# MODEL_DIR=/h/suo/dev/tree-search-planning/muzero-gneral/results #TODO: Your TF model directory
+MODEL_DIR=/scratch/gobi1/suo/experiments/tree-search-planning
 
-ipnport=12334 # TODO set your port here
+ipnport=60315 # TODO set your port here
 echo ipnport=$ipnport
 
 ipnip=$(hostname -i)

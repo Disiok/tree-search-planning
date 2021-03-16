@@ -56,6 +56,11 @@ class MuZero:
             if type(config) is dict:
                 for param, value in config.items():
                     setattr(self.config, param, value)
+                
+                    # NOTE(suo): If we are overriding experiment name, update the results dir to reflect
+                    if param == 'exp_name':
+                        self.config.results_path = self.config.results_path.replace('default', value)
+                        print(f'Updating results path to {self.config.results_path}')
             else:
                 self.config = config
 
@@ -99,7 +104,7 @@ class MuZero:
         # TODO(sergio): make this ray dir configurable from the game config.
         # NOTE(suo): Expose dashboard to all interfaces for remote access
         print('Initializing Ray')
-        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True, dashboard_host="0.0.0.0")
+        ray.init(_temp_dir='/scratch/gobi1/suo/tmp', num_gpus=total_gpus, ignore_reinit_error=True, dashboard_host="0.0.0.0")
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -218,14 +223,14 @@ class MuZero:
                 self.replay_buffer_worker, self.shared_storage_worker
             )
 
+        # NOTE(suo): Force print, not sure why this is necessary for sbatch jobs
+        sys.stdout.flush()
+
         if log_in_tensorboard:
             print('Initializing tensorboard logging')
             self.logging_loop(
                 num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             )
-
-        # NOTE(suo): Force print
-        sys.stdout.flush()
 
     def logging_loop(self, num_gpus):
         """
@@ -328,6 +333,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Value_loss", info["value_loss"], counter)
                 writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
+                writer.flush()
                 print(
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
                 counter += 1
@@ -624,6 +630,16 @@ if __name__ == "__main__":
         # Train directly with "python muzero.py cartpole"
         print(f'Training kicked off for environment {sys.argv[1]}')
         muzero = MuZero(sys.argv[1])
+        muzero.train()
+    if len(sys.argv) == 3:
+        # Train directly with "python muzero.py cartpole exp_name"
+        print(f'Training kicked off for environment {sys.argv[1]} with exp name {sys.argv[2]}')
+        
+        # NOTE(suo): Override experiment name
+        override_config = {
+            'exp_name':  sys.argv[2]
+        }
+        muzero = MuZero(sys.argv[1], override_config)
         muzero.train()
     else:
         print("\nWelcome to MuZero! Here's a list of games:")
