@@ -92,13 +92,13 @@ class MuZero:
 
         # NOTE(sergio): Ray be able to utilize all cores unless otherwise specified.
         # NOTE(sergio): seems like the current `init` call is for a single node.
-        #               Hopefully sufficient for the highway-env setting? 
+        #               Hopefully sufficient for the highway-env setting?
         #               Should be easy to change to multiple nodes as well if Vector supports it.
         #               Although perhaps other parts of the code should be change, as they use DataParallel? Not sure.
         # NOTE(sergio): By default, num_cpus is set based on virtual cores.
         # TODO(sergio): make this ray dir configurable from the game config.
         print('Initializing Ray')
-        ray.init(_temp_dir='/scratch/gobi1/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(_temp_dir='/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -122,7 +122,7 @@ class MuZero:
         }
         self.replay_buffer = {}
 
-        # NOTE(sergio): I am a bit confused with the purpose of CPUActor. 
+        # NOTE(sergio): I am a bit confused with the purpose of CPUActor.
         #               It looks like it is not used anywhere else in the codebase, and the object ref is lost after this point
         #               If it is only to get the initial weights, why do we need a ray remote actor/function for that?
         #               Is this just a way to guarantee we get the same weights across all workers?
