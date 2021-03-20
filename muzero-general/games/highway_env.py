@@ -20,7 +20,7 @@ class MuZeroConfig:
 
 
         ### Game
-        self.observation_shape = (1, 1, 35)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.observation_shape = (1, 1, 36)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 0  # Number of previous observations and previous actions to add to the current observation
@@ -32,7 +32,7 @@ class MuZeroConfig:
 
 
         ### Self-Play
-        self.num_workers = 12 # Number of simultaneous threads/workers self-playing to feed the replay buffer
+        self.num_workers = 16 # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 500  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
@@ -75,12 +75,14 @@ class MuZeroConfig:
 
 
         ### Training
-        self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
+        self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", "highway_env_please_work", datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 500000  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 128  # Number of parts of games to train on at each training step
+        self.training_steps = 15000 # Total number of training steps (ie weights update according to a batch)
+        self.batch_size = 1024 # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.reward_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.policy_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
@@ -110,7 +112,7 @@ class MuZeroConfig:
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
         self.training_delay = 0  # Number of seconds to wait after each training step
-        self.ratio = 1.5  # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
+        self.ratio = 1 # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
 
 
     def visit_softmax_temperature_fn(self, trained_steps):
@@ -142,7 +144,7 @@ class Game(AbstractGame):
                     'type': 'Kinematics',
                     'vehicles_count': 5,
                     'features': ['presence', 'x', 'y', 'vx', 'vy', 'cos_h', 'sin_h'],
-                    'normalized': False,
+                    'normalized': True,
                     'features_range': {
                         'x': [-100, 100],
                         'y': [-100, 100],
@@ -181,8 +183,13 @@ class Game(AbstractGame):
             self.env.seed(seed)
 
 
-    def reshape_obs(self, obs):
-        return numpy.reshape(obs, [1, 1, 35])  # Determined by the env obs config: vehicles_count * len(features)
+    def reshape_obs(self, obs, step):
+        obs = numpy.reshape(obs, [1, 1, 35])  # Determined by the env obs config: vehicles_count * len(features)
+        obs[:, 0] = (obs[:, 0] - 0.) / 1.
+        obs[1:, 1:3] = (obs[:, 1:3] - -100.) / 200.
+        obs[:, 3:5] = (obs[:, 3:5] - -20.) / 40.
+        step = numpy.full_like(obs[..., :1], (step - 20.) / 40.)
+        return numpy.concatenate([obs, step], axis=-1)
 
 
     def step(self, action):
@@ -196,7 +203,7 @@ class Game(AbstractGame):
             The new observation, the reward and a boolean if the game has ended.
         """
         observation, reward, done, _ = self.env.step(action)
-        return self.reshape_obs(observation), reward, done
+        return self.reshape_obs(observation, self.env.steps), reward, done
 
     def legal_actions(self):
         """
@@ -219,7 +226,7 @@ class Game(AbstractGame):
             Initial observation of the game.
         """
         observation = self.env.reset()
-        return self.reshape_obs(observation)
+        return self.reshape_obs(observation, self.env.steps)
 
     def close(self):
         """
