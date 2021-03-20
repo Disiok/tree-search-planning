@@ -18,4 +18,4 @@ conda activate tsmp-cuda10
 (while true; do nvidia-smi; sleep 60; done) &
 
 cd /h/kelvin/projects/mcts_planner/tsmp/muzero-general
-python muzero.py
+python muzero.py highway_env
