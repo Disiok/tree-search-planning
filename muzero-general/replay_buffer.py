@@ -274,7 +274,7 @@ class ReplayBuffer:
                 # Uniform policy
                 target_policies.append(
                     [
-                        1 / len(game_history.child_visits[0])
+                        0.
                         for _ in range(len(game_history.child_visits[0]))
                     ]
                 )
@@ -286,7 +286,7 @@ class ReplayBuffer:
                 # Uniform policy
                 target_policies.append(
                     [
-                        1 / len(game_history.child_visits[0])
+                        0.
                         for _ in range(len(game_history.child_visits[0]))
                     ]
                 )
