@@ -108,7 +108,7 @@ class SelfPlay:
         self.close_game()
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player
+        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -124,6 +124,9 @@ class SelfPlay:
 
         if render:
             self.game.render()
+
+        if save_gif:
+            self.game.render_rgb()
 
         with torch.no_grad():
             while (
@@ -172,6 +175,9 @@ class SelfPlay:
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
                     self.game.render()
+                
+                if save_gif:
+                    self.game.render_rgb()
 
                 game_history.store_search_statistics(root, self.config.action_space)
 
@@ -180,6 +186,9 @@ class SelfPlay:
                 game_history.observation_history.append(observation)
                 game_history.reward_history.append(reward)
                 game_history.to_play_history.append(self.game.to_play())
+
+        if save_gif:
+            self.game.save_gif()
 
         return game_history
 

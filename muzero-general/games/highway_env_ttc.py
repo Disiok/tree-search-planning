@@ -4,6 +4,7 @@ import os
 import gym
 import numpy
 import torch
+import imageio
 
 import highway_env
 
@@ -177,6 +178,7 @@ class Game(AbstractGame):
         if seed is not None:
             self.env.seed(seed)
 
+        self.gif_imgs = []
 
     def step(self, action):
         """
@@ -225,6 +227,18 @@ class Game(AbstractGame):
         """
         self.env.render()
         input("Press enter to take a step ")
+
+    def render_rgb(self):
+        rgb_img = self.env.render(mode='rgb_array')
+        self.gif_imgs.append(rgb_img)
+    
+    def save_gif(self):
+        imageio.mimsave(
+            f'/Users/sergio/tree-search-planning/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
+            self.gif_imgs,
+            fps=5,
+        )
+        self.gif_imgs = []
 
     def action_to_string(self, action_number):
         """
