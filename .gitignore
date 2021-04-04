@@ -1,3 +1,6 @@
 .vscode
 *.log
 muzero-general/results
+tensorboards/
+scp_tensorboard.sh
+.DS_Store
