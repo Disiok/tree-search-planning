@@ -98,7 +98,7 @@ class MuZero:
         # NOTE(sergio): By default, num_cpus is set based on virtual cores.
         # TODO(sergio): make this ray dir configurable from the game config.
         print('Initializing Ray')
-        ray.init(_temp_dir='/scratch/ssd001/home/sergio/tmp', num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(_temp_dir=os.environ['RAY_TEMP_DIR'], num_gpus=total_gpus, ignore_reinit_error=True)
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -326,7 +326,7 @@ class MuZero:
                 print(
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
                 counter += 1
-                time.sleep(2.0)
+                time.sleep(5.0)
         except KeyboardInterrupt:
             pass
 
@@ -367,7 +367,7 @@ class MuZero:
         self.shared_storage_worker = None
 
     def test(
-        self, render=True, opponent=None, muzero_player=None, num_tests=1, num_gpus=0
+        self, render=True, opponent=None, muzero_player=None, num_tests=1, num_gpus=0, save_gif=False
     ):
         """
         Test the model in a dedicated thread.
@@ -397,7 +397,7 @@ class MuZero:
             results.append(
                 ray.get(
                     self_play_worker.play_game.remote(
-                        0, 0, render, opponent, muzero_player,
+                        0, 0, render, opponent, muzero_player, save_gif=save_gif
                     )
                 )
             )
@@ -417,6 +417,7 @@ class MuZero:
                 ]
             )
         return result
+
 
     def load_model(self, checkpoint_path=None, replay_buffer_path=None):
         """
@@ -488,182 +489,3 @@ class CPUActor:
         weigths = model.get_weights()
         summary = str(model).replace("\n", " \n\n")
         return weigths, summary
-
-
-def hyperparameter_search(
-    game_name, parametrization, budget, parallel_experiments, num_tests
-):
-    """
-    Search for hyperparameters by launching parallel experiments.
-
-    Args:
-        game_name (str): Name of the game module, it should match the name of a .py file
-        in the "./games" directory.
-
-        parametrization : Nevergrad parametrization, please refer to nevergrad documentation.
-
-        budget (int): Number of experiments to launch in total.
-
-        parallel_experiments (int): Number of experiments to launch in parallel.
-
-        num_tests (int): Number of games to average for evaluating an experiment.
-    """
-    # optimizer = nevergrad.optimizers.OnePlusOne(
-    #     parametrization=parametrization, budget=budget
-    # )
-    optimizer = nevergrad.optimizers.RandomSearch(
-        parametrization=parametrization, budget=budget
-    )
-
-    running_experiments = []
-    best_training = None
-    try:
-        # Launch initial experiments
-        for i in range(parallel_experiments):
-            if 0 < budget:
-                param = optimizer.ask()
-                print(f"Launching new experiment: {param.value}")
-                muzero = MuZero(game_name, param.value, parallel_experiments)
-                muzero.param = param
-                muzero.train(True)
-                running_experiments.append(muzero)
-                budget -= 1
-
-        while 0 < budget or any(running_experiments):
-            for i, experiment in enumerate(running_experiments):
-                if experiment and experiment.config.training_steps <= ray.get(
-                    experiment.shared_storage_worker.get_info.remote("training_step")
-                ):
-                    experiment.terminate_workers()
-                    result = experiment.test(False, num_tests=num_tests)
-                    if not best_training or best_training["result"] < result:
-                        best_training = {
-                            "result": result,
-                            "config": experiment.config,
-                            "checkpoint": experiment.checkpoint,
-                        }
-                    print(f"Parameters: {experiment.param.value}")
-                    print(f"Result: {result}")
-                    optimizer.tell(experiment.param, -result)
-
-                    if 0 < budget:
-                        param = optimizer.ask()
-                        print(f"Launching new experiment: {param.value}")
-                        muzero = MuZero(game_name, param.value, parallel_experiments)
-                        muzero.param = param
-                        muzero.train(True)
-                        running_experiments[i] = muzero
-                        budget -= 1
-                    else:
-                        running_experiments[i] = None
-
-    except KeyboardInterrupt:
-        for experiment in running_experiments:
-            if isinstance(experiment, MuZero):
-                experiment.terminate_workers()
-
-    recommendation = optimizer.provide_recommendation()
-    print("Best hyperparameters:")
-    print(recommendation.value)
-    if best_training:
-        # Save best training weights (but it's not the recommended weights)
-        os.makedirs(best_training["config"].results_path, exist_ok=True)
-        torch.save(
-            best_training["checkpoint"],
-            os.path.join(best_training["config"].results_path, "model.checkpoint"),
-        )
-        # Save the recommended hyperparameters
-        text_file = open(
-            os.path.join(best_training["config"].results_path, "best_parameters.txt"),
-            "w",
-        )
-        text_file.write(str(recommendation.value))
-        text_file.close()
-    return recommendation.value
-
-
-def load_model_menu(muzero, game_name):
-    # Configure running options
-    options = ["Specify paths manually"] + sorted(glob(f"results/{game_name}/*/"))
-    options.reverse()
-    print()
-    for i in range(len(options)):
-        print(f"{i}. {options[i]}")
-
-    choice = input("Enter a number to choose a model to load: ")
-    valid_inputs = [str(i) for i in range(len(options))]
-    while choice not in valid_inputs:
-        choice = input("Invalid input, enter a number listed above: ")
-    choice = int(choice)
-
-    if choice == (len(options) - 1):
-        # manual path option
-        checkpoint_path = input(
-            "Enter a path to the model.checkpoint, or ENTER if none: "
-        )
-        while checkpoint_path and not os.path.isfile(checkpoint_path):
-            checkpoint_path = input("Invalid checkpoint path. Try again: ")
-        replay_buffer_path = input(
-            "Enter a path to the replay_buffer.pkl, or ENTER if none: "
-        )
-        while replay_buffer_path and not os.path.isfile(replay_buffer_path):
-            replay_buffer_path = input("Invalid replay buffer path. Try again: ")
-    else:
-        checkpoint_path = f"{options[choice]}model.checkpoint"
-        replay_buffer_path = f"{options[choice]}replay_buffer.pkl"
-
-    muzero.load_model(
-        checkpoint_path=checkpoint_path, replay_buffer_path=replay_buffer_path,
-    )
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        # Train directly with "python muzero.py cartpole"
-        print(f'Training kicked off for environment {sys.argv[1]}')
-        muzero = MuZero(sys.argv[1])
-        muzero.train()
-    else:
-        # Initialize MuZero
-        game_name = "highway_env"
-        muzero = MuZero(game_name)
-
-        # Define here the parameters to tune
-        # Parametrization documentation: https://facebookresearch.github.io/nevergrad/parametrization.html
-        muzero.terminate_workers()
-        del muzero
-        budget = 30
-        parallel_experiments = 10
-        num_tests = 40
-        parametrization = nevergrad.p.Dict(
-            # lr_init=nevergrad.p.Log(lower=0.005, upper=0.01),
-            # lr_decay_rate=nevergrad.p.Scalar(lower=0.1, upper=0.9),
-            # lr_decay_steps = nevergrad.p.Log(lower=5e3, upper=3e4).set_integer_casting(),
-            # discount=nevergrad.p.Scalar(lower=0.95, upper=0.9999),
-            # td_steps=nevergrad.p.Scalar(lower=1, upper=10).set_integer_casting(),
-            # num_simulations=nevergrad.p.Log(lower=1, upper=100).set_integer_casting(),
-            # checkpoint_interval=nevergrad.p.Log(lower=10, upper=1000).set_integer_casting(),
-            # batch_size=nevergrad.p.Choice([256, 512]),
-            # PER=nevergrad.p.Choice([True, False]),
-            # PER_alpha=nevergrad.p.Scalar(lower=0.0, upper=1.0),
-            # value_loss_weight=nevergrad.p.Scalar(lower=0.5, upper=1.0),
-            # optimizer=nevergrad.p.Choice(['Adam', 'SGD']),
-            # use_last_model_value=nevergrad.p.Choice([True, False]),
-            # stacked_observations=nevergrad.p.Choice([1, 5]),
-            # ratio=nevergrad.p.Choice([None, 1.5]),
-            # support_size=nevergrad.p.Choice([10, 300]),
-            # num_unroll_steps=nevergrad.p.Scalar(lower=1, upper=15).set_integer_casting(),
-            # weight_decay=nevergrad.p.Choice([0.0, 1e-4]),
-            # root_dirichlet_alpha = nevergrad.p.Scalar(lower=0.0, upper=5.0),
-            # root_exploration_fraction = nevergrad.p.Scalar(lower=0.0, upper=1.0),
-            support_size = nevergrad.p.Choice([2, 5, 10, 50, 100]),
-        )
-
-        print("Searching hyperparameters")
-        best_hyperparameters = hyperparameter_search(
-            game_name, parametrization, budget, parallel_experiments, num_tests
-        )
-        muzero = MuZero(game_name, best_hyperparameters)
-        print("\nDone")
-
-    ray.shutdown()
