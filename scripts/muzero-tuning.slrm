@@ -17,4 +17,4 @@ source /h/sergio/.bashrc
 conda activate tree-search-planning
 
 cd /h/sergio/tree-search-planning/muzero-general
-python -u muzero_interactive.py highway_env
+python -u muzero.py
