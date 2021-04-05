@@ -56,7 +56,7 @@ def hyperparameter_search(
             if 0 < budget:
                 param = optimizer.ask()
                 print(f"Launching new experiment: {param.value}")
-                muzero = MuZero(game_name, param.value, parallel_experiments)
+                muzero = MuZero(game_name, param.value, parallel_experiments, remote_logging=True)
                 muzero.param = param
                 muzero.train(True)
                 running_experiments.append(muzero)
