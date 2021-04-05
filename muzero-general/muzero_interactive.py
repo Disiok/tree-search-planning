@@ -63,6 +63,7 @@ if __name__ == "__main__":
         # Train directly with "python muzero.py cartpole"
         print(f'Training kicked off for environment {sys.argv[1]}')
         muzero = MuZero(sys.argv[1])
+        print(f'Saving results to {muzero.config.results_path}')
         muzero.train()
     else:
         print("\nWelcome to MuZero! Here's a list of games:")

@@ -39,7 +39,7 @@ class MuZero:
         >>> muzero.test(render=True)
     """
 
-    def __init__(self, game_name, config=None, split_resources_in=1):
+    def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False):
         # Load the game and the config from the module with the game name
         try:
             game_module = importlib.import_module("games." + game_name)
@@ -90,15 +90,13 @@ class MuZero:
         if 1 < self.num_gpus:
             self.num_gpus = math.floor(self.num_gpus)
 
-        # NOTE(sergio): Ray be able to utilize all cores unless otherwise specified.
-        # NOTE(sergio): seems like the current `init` call is for a single node.
-        #               Hopefully sufficient for the highway-env setting?
-        #               Should be easy to change to multiple nodes as well if Vector supports it.
-        #               Although perhaps other parts of the code should be change, as they use DataParallel? Not sure.
-        # NOTE(sergio): By default, num_cpus is set based on virtual cores.
-        # TODO(sergio): make this ray dir configurable from the game config.
         print('Initializing Ray')
-        ray.init(_temp_dir=os.environ['RAY_TEMP_DIR'], num_gpus=total_gpus, ignore_reinit_error=True)
+        ray.init(
+            _temp_dir=os.environ['RAY_TEMP_DIR'],
+            num_gpus=total_gpus,
+            ignore_reinit_error=True,
+            object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
+        )
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -140,6 +138,8 @@ class MuZero:
         self.reanalyse_worker = None
         self.replay_buffer_worker = None
         self.shared_storage_worker = None
+
+        self.remote_logging = remote_logging
 
     def train(self, log_in_tensorboard=True):
         """
@@ -217,11 +217,19 @@ class MuZero:
 
         if log_in_tensorboard:
             print('Initializing tensorboard logging')
-            self.logging_loop.remote(
-                self, num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
-            )
-
+            if self.remote_logging:
+                self.logging_loop.remote(
+                    self, num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                )
+            else:
+                self.logging_loop(
+                    num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                )
+    
     @ray.remote
+    def remote_logging_loop(self, num_gpus):
+        self.logging_loop(num_gpus)
+
     def logging_loop(self, num_gpus):
         """
         Keep track of the training performance.
@@ -326,7 +334,21 @@ class MuZero:
                 print(
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
                 counter += 1
+
+                if counter % 1000 == 0 and self.config.save_model:
+                    # Persist replay buffer to disk
+                    print("\n\nPersisting replay buffer games to disk...")
+                    pickle.dump(
+                        {
+                            "buffer": self.replay_buffer,
+                            "num_played_games": self.checkpoint["num_played_games"],
+                            "num_played_steps": self.checkpoint["num_played_steps"],
+                            "num_reanalysed_games": self.checkpoint["num_reanalysed_games"],
+                        },
+                        open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
+                    )
                 time.sleep(5.0)
+                
         except KeyboardInterrupt:
             pass
 
