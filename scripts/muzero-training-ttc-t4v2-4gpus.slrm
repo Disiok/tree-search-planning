@@ -13,14 +13,9 @@
 echo Running on $(hostname)
 source /h/sergio/.bashrc
 
-# . /h/sergio/envs/cuda11.env
 . /h/sergio/tree-search-planning/project.env
 
-# conda activate tsmp
-# conda activate tree-search-planning
 conda activate tree-search-planning-1.7
-
-nvidia-smi
 
 cd /h/sergio/tree-search-planning/muzero-general
 
