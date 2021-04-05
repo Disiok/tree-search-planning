@@ -13,6 +13,8 @@ echo Running on $(hostname)
 source /h/sergio/.bashrc
 
 . /h/sergio/envs/cuda11.env
+. /h/sergio/tree-search-planning/project.env
+
 # conda activate tsmp
 conda activate tree-search-planning
 
