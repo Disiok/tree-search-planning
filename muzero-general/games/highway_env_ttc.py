@@ -21,7 +21,7 @@ class MuZeroConfig:
 
 
         ### Game
-        self.observation_shape = (3, 3, 10)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.observation_shape = (1, 1, 90)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 1  # Number of previous observations and previous actions to add to the current observation
@@ -51,7 +51,7 @@ class MuZeroConfig:
 
 
         ### Network
-        self.network = "resnet"  # "resnet" / "fullyconnected"
+        self.network = "fullyconnected"  # "resnet" / "fullyconnected"
         self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
 
         # Residual Network
@@ -66,8 +66,8 @@ class MuZeroConfig:
         self.resnet_fc_policy_layers = [32]  # Define the hidden layers in the policy head of the prediction network
 
         # Fully Connected Network
-        self.encoding_size = 32
-        self.fc_representation_layers = [32]  # Define the hidden layers in the representation network
+        self.encoding_size = 64
+        self.fc_representation_layers = [64, 64, 32]  # Define the hidden layers in the representation network
         self.fc_dynamics_layers = [32]  # Define the hidden layers in the dynamics network
         self.fc_reward_layers = [32]  # Define the hidden layers in the reward network
         self.fc_value_layers = [32]  # Define the hidden layers in the value network
@@ -81,7 +81,7 @@ class MuZeroConfig:
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
             'first_try', 
-            'rewardx5_repro_t4v2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            'rewardx5_MLP_t4v2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
@@ -180,6 +180,9 @@ class Game(AbstractGame):
 
         self.gif_imgs = []
 
+    def reshape_obs(self, obs):
+        return numpy.reshape(obs, [1, 1, 90])  # Flatten all velocities, timesteps and lanes
+
     def step(self, action):
         """
         Apply action to the game.
@@ -191,7 +194,7 @@ class Game(AbstractGame):
             The new observation, the reward and a boolean if the game has ended.
         """
         observation, reward, done, _ = self.env.step(action)
-        return observation, reward, done
+        return self.reshape_obs(observation), reward, done
 
     def legal_actions(self):
         """
@@ -213,7 +216,8 @@ class Game(AbstractGame):
         Returns:
             Initial observation of the game.
         """
-        return self.env.reset()
+        observation = self.env.reset()
+        return self.reshape_obs(observation)
 
     def close(self):
         """
