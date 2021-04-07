@@ -50,7 +50,7 @@ class MuZeroConfig:
 
         ### Network
         self.network = "fullyconnected"  # "resnet" / "fullyconnected"
-        self.support_size = 100  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
+        self.support_size = 50  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
         
         # Residual Network
         self.downsample = False  # Downsample observations before representation network, False / "CNN" (lighter) / "resnet" (See paper appendix Network Architecture)
@@ -80,9 +80,9 @@ class MuZeroConfig:
                                          self.exp_name, 
                                          datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 500000  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 256  # Number of parts of games to train on at each training step
-        self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
+        self.training_steps = 250000  # Total number of training steps (ie weights update according to a batch)
+        self.batch_size = 128  # Number of parts of games to train on at each training step
+        self.checkpoint_interval = 1000  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
@@ -99,10 +99,14 @@ class MuZeroConfig:
 
         ### Replay Buffer
         self.replay_buffer_size = int(1e6)  # Number of self-play games to keep in the replay buffer
-        self.num_unroll_steps = 10  # Number of game moves to keep for every batch element
+        # NOTE(suo): Paper says 5 steps?
+        # self.num_unroll_steps = 10  # Number of game moves to keep for every batch element
+        self.num_unroll_steps = 5  # Number of game moves to keep for every batch element
         self.td_steps = 10  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
-        self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
+        # NOTE(suo): Changing to value suggested in the paper
+        # self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
+        self.PER_alpha = 1.  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
 
         # Reanalyze (See paper appendix Reanalyse)
         self.use_last_model_value = True  # Use the last model to provide a fresher, stable n-step value (See paper appendix Reanalyze)

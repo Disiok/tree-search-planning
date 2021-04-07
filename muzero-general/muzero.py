@@ -336,8 +336,8 @@ class MuZero:
                 writer.flush()
                 print(
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
-                counter += 1
-                time.sleep(0.5)
+                counter += 2
+                time.sleep(1)
         except KeyboardInterrupt:
             pass
 
