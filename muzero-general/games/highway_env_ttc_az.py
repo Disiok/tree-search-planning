@@ -14,3 +14,11 @@ class MuZeroConfig(_MuZeroConfig):
 
         ### Replay Buffer
         self.num_unroll_steps = 0  # Number of game moves to keep for every batch element
+
+        ### Training
+        self.results_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "../results", os.path.basename(__file__)[:-3],
+            'first_try', 
+            'rewardx5_repro_t4v2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+        )  # Path to store the model weights and TensorBoard logs
