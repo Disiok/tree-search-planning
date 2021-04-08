@@ -24,22 +24,37 @@ import trainer
 from muzero import MuZero
 
 
-def evaluate_muzero(env, checkpoint_path, n_episodes):
+def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus):
     # Initialize MuZero
     muzero = MuZero(env)
-    muzero.load_model(checkpoint_path=checkpoint_path)
+    if checkpoint_path is not None:
+        muzero.load_model(checkpoint_path=checkpoint_path)
 
-    result = muzero.test(render=False, opponent='self', muzero_player=None, num_tests=n_episodes, save_gif=False)
+    result = muzero.test(render=False, opponent='self', muzero_player=None, num_tests=n_episodes, save_gif=False, num_gpus=num_gpus)
+    ray.shutdown()
+
+    return result
+
+
+def evaluate(model, env, checkpoint_path, n_episodes, num_gpus):
+    if model == 'muzero':
+        result = evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus)
+    elif model == 'alphazero':
+        raise NotImplementedError('TODO: Hook up alphazero from Kelvin')
+    else: 
+        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py`)
 
     return result
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='highway_env_ttc')
+    parser.add_argument('--model', type=str, default='muzero')
+    parser.add_argument('--env', type=str, default='highway_env')
     parser.add_argument('--checkpoint_path', type=str, default='/h/suo/dev/tree-search-planning/muzero-general/results/highway_env/2021-03-14--22-39-32/model.checkpoint')
-    parser.add_argument('--n_episodes', type=int, default=50)
+    parser.add_argument('--n_episodes', type=int, default=5)
+    parser.add_argument('--num_gpus', type=int, default=1)
     args = parser.parse_args()
 
-    evaluate_muzero(args.env, args.checkpoint_path, args.n_episodes)
-    ray.shutdown()
+    result = evaluate(args.model, args.env, args.checkpoint_path, args.n_episodes, args.num_gpus)
+    print(result)

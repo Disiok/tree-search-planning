@@ -17,6 +17,7 @@ import diagnose_model
 import models
 import replay_buffer
 import self_play
+import self_play_local
 import shared_storage
 import trainer
 
@@ -413,20 +414,14 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        self_play_worker = self_play.SelfPlay.options(
-            num_cpus=0, num_gpus=num_gpus,
-        ).remote(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")
             results.append(
-                ray.get(
-                    self_play_worker.play_game.remote(
-                        0, 0, render, opponent, muzero_player, save_gif=save_gif
-                    )
-                )
+                self_play_worker.play_game(0, 0, render, opponent, muzero_player, save_gif=save_gif)
             )
-        self_play_worker.close_game.remote()
+        self_play_worker.close_game()
 
         if len(self.config.players) == 1:
             mean_total_reward = numpy.mean([sum(history.reward_history) for history in results])
@@ -442,7 +437,7 @@ class MuZero:
                 ]
             )
         
-        mean_episode_length = numpy.mean([len(history.action_history) - 1] for history in results)
+        mean_episode_length = numpy.mean([len(history.action_history) - 1 for history in results])
 
         result = {
             'mean_total_reward': mean_total_reward,
