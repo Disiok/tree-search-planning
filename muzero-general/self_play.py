@@ -699,7 +699,6 @@ class AZMCTS(MCTS):
                 policy_logits,
                 _,
             ) = model.initial_inference(observation)
-            # [1 x 3 x 7 x 10]
             assert (
                 legal_actions
             ), f"Legal actions should not be an empty array. Got {legal_actions}."
@@ -771,7 +770,6 @@ class AZMCTS(MCTS):
                     .unsqueeze(0)
                     .to(next(model.parameters()).device)
                 )
-                # [1 x 3 x 3 x 10]
                 value, _, policy_logits, _ = model.initial_inference(observation)
                 value = models.support_to_scalar(value, self.config.support_size).item()
                 node.expand(
