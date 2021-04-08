@@ -152,7 +152,6 @@ class SelfPlay:
                             self.model,
                             self.game,
                             game_history,
-                            # stacked_observations,
                             self.game.legal_actions(),
                             self.game.to_play(),
                             True,
@@ -181,7 +180,7 @@ class SelfPlay:
                         )
                 else:
                     action, root = self.select_opponent_action(
-                        opponent, stacked_observations
+                        opponent, stacked_observations, game_history
                     )
 
                 observation, reward, done = self.game.step(action)
@@ -209,7 +208,7 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations):
+    def select_opponent_action(self, opponent, stacked_observations, game_history):
         """
         Select opponent action for evaluating MuZero level.
         """
@@ -218,7 +217,7 @@ class SelfPlay:
                 root, mcts_info = AZMCTS(self.config).run(
                     self.model,
                     self.game,
-                    stacked_observations,
+                    game_history,
                     self.game.legal_actions(),
                     self.game.to_play(),
                     True,
