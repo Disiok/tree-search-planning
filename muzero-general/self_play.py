@@ -1,6 +1,8 @@
+import copy
 import math
 import time
 
+import gym
 import numpy
 import ray
 import torch
@@ -145,13 +147,25 @@ class SelfPlay:
 
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
-                    root, mcts_info = MCTS(self.config).run(
-                        self.model,
-                        stacked_observations,
-                        self.game.legal_actions(),
-                        self.game.to_play(),
-                        True,
-                    )
+                    if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                        root, mcts_info = AZMCTS(self.config).run(
+                            self.model,
+                            self.game,
+                            game_history,
+                            # stacked_observations,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+                    else:
+                        root, mcts_info = MCTS(self.config).run(
+                            self.model,
+                            stacked_observations,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+
                     action = self.select_action(
                         root,
                         temperature
@@ -200,13 +214,23 @@ class SelfPlay:
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
-            root, mcts_info = MCTS(self.config).run(
-                self.model,
-                stacked_observations,
-                self.game.legal_actions(),
-                self.game.to_play(),
-                True,
-            )
+            if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                root, mcts_info = AZMCTS(self.config).run(
+                    self.model,
+                    self.game,
+                    stacked_observations,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
+            else:
+                root, mcts_info = MCTS(self.config).run(
+                    self.model,
+                    stacked_observations,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
             print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
             print(
@@ -525,6 +549,10 @@ class GameHistory:
         Generate a new observation with the observation at the index position
         and num_stacked_observations past observations and actions stacked.
         """
+        return _get_stacked_observations(
+            self.observation_history, self.action_history, index, num_stacked_observations
+        )
+
         # Convert to positive index
         index = index % len(self.observation_history)
 
@@ -557,6 +585,40 @@ class GameHistory:
         return stacked_observations
 
 
+def _get_stacked_observations(observations, actions, index, num_stacked_observations):
+    # Convert to positive index
+    index = index % len(observations)
+
+    stacked_observations = observations[index].copy()
+    for past_observation_index in reversed(
+        range(index - num_stacked_observations, index)
+    ):
+        if 0 <= past_observation_index:
+            previous_observation = numpy.concatenate(
+                (
+                    observations[past_observation_index],
+                    [
+                        numpy.ones_like(stacked_observations[0])
+                        * actions[past_observation_index + 1]
+                    ],
+                )
+            )
+        else:
+            previous_observation = numpy.concatenate(
+                (
+                    numpy.zeros_like(observations[index]),
+                    [numpy.zeros_like(stacked_observations[0])],
+                )
+            )
+
+        stacked_observations = numpy.concatenate(
+            (stacked_observations, previous_observation)
+        )
+
+    return stacked_observations
+
+
+
 class MinMaxStats:
     """
     A class that holds the min-max values of the tree.
@@ -575,3 +637,158 @@ class MinMaxStats:
             # We normalize only when we have set the maximum and minimum values
             return (value - self.minimum) / (self.maximum - self.minimum)
         return value
+
+
+def _safe_deepcopy_env(obj):
+    """Return a deepcopy of the environmnet, but without copying its viewer."""
+    cls = obj.__class__
+    result = cls.__new__(cls)
+    memo = {id(obj): result}
+    for k, v in obj.__dict__.items():
+        if k not in ['viewer', 'automatic_rendering_callback', 'automatic_record_callback', 'grid_render']:
+            if isinstance(v, gym.Env):
+                setattr(result, k, _safe_deepcopy_env(v))
+            else:
+                setattr(result, k, copy.deepcopy(v, memo=memo))
+        else:
+            setattr(result, k, None)
+    return result
+
+
+class AZMCTS(MCTS):
+    r"""MCTS algorithm adapted to AlphaZero.
+    
+    NOTE(kwong): This class works for HighwayEnv only.
+    """
+
+    def run(
+        self,
+        model,
+        game,
+        game_history,
+        legal_actions,
+        to_play,
+        add_exploration_noise,
+        override_root_with=None,
+    ):
+        r"""Run MCTS for a number of simulations.
+        
+        In contrast to ``MCTS::run``, this method requires an additional
+        argument ``game``, which supplies ground truth dynamics for MCTS.
+        """
+        if override_root_with:
+            root = override_root_with
+            root_predicted_value = None
+        else:
+            root = Node(0)
+            observation = _get_stacked_observations(
+                game_history.observation_history,
+                game_history.action_history,
+                -1,
+                self.config.stacked_observations
+            )
+            observation = (
+                torch.tensor(observation)
+                .float()
+                .unsqueeze(0)
+                .to(next(model.parameters()).device)
+            )
+            (
+                _,
+                _,
+                policy_logits,
+                _,
+            ) = model.initial_inference(observation)
+            # [1 x 3 x 7 x 10]
+            assert (
+                legal_actions
+            ), f"Legal actions should not be an empty array. Got {legal_actions}."
+            assert set(legal_actions).issubset(
+                set(self.config.action_space)
+            ), "Legal actions should be a subset of the action space."
+
+            hidden_state = (
+                game.env.simplify(),  # NOTE(kwong): This works for highway-env only.
+                game_history.observation_history[-1],
+                game_history.action_history[-1],
+                False
+            )
+            root.expand(
+                legal_actions,
+                to_play,
+                0.,  # no rewards at the root node
+                policy_logits,
+                hidden_state,  # hidden state of the game
+            )
+
+        if add_exploration_noise:
+            root.add_exploration_noise(
+                dirichlet_alpha=self.config.root_dirichlet_alpha,
+                exploration_fraction=self.config.root_exploration_fraction,
+            )
+
+        min_max_stats = MinMaxStats()
+
+        max_tree_depth = 0
+        for _ in range(self.config.num_simulations):
+            node = root
+
+            terminal = False
+            search_path = [node]
+            current_tree_depth = 0
+            virtual_to_play = to_play
+
+            while node.expanded() and not terminal:
+                current_tree_depth += 1
+                action, node = self.select_child(node, min_max_stats)
+                if node.expanded():
+                    _, _, _, terminal = node.hidden_state
+                search_path.append(node)
+
+                # Players play turn by turn
+                if virtual_to_play + 1 < len(self.config.players):
+                    virtual_to_play = self.config.players[virtual_to_play + 1]
+                else:
+                    virtual_to_play = self.config.players[0]
+
+            if not terminal:
+                state, _, _, _ = search_path[-2].hidden_state
+                next_state = _safe_deepcopy_env(state)
+                observation, reward, terminal, _ = next_state.step(action)
+                next_hidden_state = (next_state, observation, action, terminal)
+
+                # first node in search_path (root) is already in observation_history
+                # last node in search_path (current node) is not expanded yet
+                observation = _get_stacked_observations(
+                    game_history.observation_history + [n.hidden_state[1] for n in search_path[1:-1]] + [observation],
+                    game_history.action_history + [n.hidden_state[2] for n in search_path[1:-1]] + [action],
+                    -1,
+                    self.config.stacked_observations
+                )
+                observation = (
+                    torch.tensor(observation)
+                    .float()
+                    .unsqueeze(0)
+                    .to(next(model.parameters()).device)
+                )
+                # [1 x 3 x 3 x 10]
+                value, _, policy_logits, _ = model.initial_inference(observation)
+                value = models.support_to_scalar(value, self.config.support_size).item()
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,  # reward of action leading to this node
+                    policy_logits,
+                    next_hidden_state,  # new hidden state
+                )
+            else:
+                value = 0.  # terminal states have no value
+
+            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+            max_tree_depth = max(max_tree_depth, current_tree_depth)
+
+        extra_info = {
+            "max_tree_depth": max_tree_depth,
+            "root_predicted_value": None,
+        }
+        return root, extra_info

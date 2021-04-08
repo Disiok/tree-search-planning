@@ -95,7 +95,7 @@ class MuZero:
             _temp_dir=os.environ['RAY_TEMP_DIR'],
             num_gpus=total_gpus,
             ignore_reinit_error=True,
-            object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
+            object_store_memory=10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
         )
 
         # Checkpoint and replay buffer used to initialize workers
