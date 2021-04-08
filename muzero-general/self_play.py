@@ -547,11 +547,10 @@ class GameHistory:
         """
         Generate a new observation with the observation at the index position
         and num_stacked_observations past observations and actions stacked.
-        """
-        return _get_stacked_observations(
-            self.observation_history, self.action_history, index, num_stacked_observations
-        )
 
+        NOTE(kwong): This code is duplicated below. But we'll leave it here so
+        that we don't introduce new bugs to the existing MuZero implementation.
+        """
         # Convert to positive index
         index = index % len(self.observation_history)
 
