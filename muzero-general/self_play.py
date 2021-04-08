@@ -669,11 +669,7 @@ class AZMCTS(MCTS):
         add_exploration_noise,
         override_root_with=None,
     ):
-        r"""Run MCTS for a number of simulations.
-        
-        In contrast to ``MCTS::run``, this method requires an additional
-        argument ``game``, which supplies ground truth dynamics for MCTS.
-        """
+        r"""Run MCTS for a number of simulations."""
         if override_root_with:
             root = override_root_with
             root_predicted_value = None
