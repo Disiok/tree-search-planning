@@ -112,7 +112,9 @@ class MuZero:
             "total_loss": 0,
             "value_loss": 0,
             "reward_loss": 0,
+            "terminal_loss": 0,
             "policy_loss": 0,
+            "reconstruction_loss": 0,
             "num_played_games": 0,
             "num_played_steps": 0,
             "num_reanalysed_games": 0,
@@ -279,7 +281,9 @@ class MuZero:
             "total_loss",
             "value_loss",
             "reward_loss",
+            "terminal_loss",
             "policy_loss",
+            "reconstruction_loss",
             "num_played_games",
             "num_played_steps",
             "num_reanalysed_games",
@@ -330,9 +334,11 @@ class MuZero:
                 )
                 writer.add_scalar("3.Loss/Value_loss", info["value_loss"], counter)
                 writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
+                writer.add_scalar("3.Loss/Terminal_loss", info["terminal_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
+                writer.add_scalar("3.Loss/Reconstruction_loss", info["reconstruction_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
+                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}')
                 counter += 1
 
                 if counter % 1000 == 0 and self.config.save_model:

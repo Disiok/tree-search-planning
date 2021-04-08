@@ -319,7 +319,9 @@ class MCTS:
             (
                 root_predicted_value,
                 reward,
+                _,
                 policy_logits,
+                _,
                 hidden_state,
             ) = model.initial_inference(observation)
             root_predicted_value = models.support_to_scalar(
@@ -369,23 +371,32 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            value, reward, policy_logits, hidden_state = model.recurrent_inference(
+            value, reward, terminal, policy_logits, reconstruction, hidden_state = model.recurrent_inference(
                 parent.hidden_state,
                 torch.tensor([[action]]).to(parent.hidden_state.device),
             )
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
-            node.expand(
-                self.config.action_space,
-                virtual_to_play,
-                reward,
-                policy_logits,
-                hidden_state,
-            )
+            is_terminal = terminal.item() >= 0.  # hard threshold to determine terminal state
 
-            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
-
-            max_tree_depth = max(max_tree_depth, current_tree_depth)
+            # only expand node if we're not at a terminal state
+            # or if we don't actually use the is_terminal prediction
+            if (
+                not is_terminal
+                or not (hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states)
+            ):
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,
+                    policy_logits,
+                    hidden_state,
+                )
+                self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+                max_tree_depth = max(max_tree_depth, current_tree_depth)
+            else:
+                self.backpropagate(search_path, 0., virtual_to_play, min_max_stats)
+                max_tree_depth = max(max_tree_depth, current_tree_depth)
 
         extra_info = {
             "max_tree_depth": max_tree_depth,
@@ -690,8 +701,10 @@ class AZMCTS(MCTS):
             (
                 _,
                 _,
+                _,
                 policy_logits,
                 _,
+                _
             ) = model.initial_inference(observation)
             assert (
                 legal_actions
@@ -764,7 +777,7 @@ class AZMCTS(MCTS):
                     .unsqueeze(0)
                     .to(next(model.parameters()).device)
                 )
-                value, _, policy_logits, _ = model.initial_inference(observation)
+                value, _, _, policy_logits, _, _ = model.initial_inference(observation)
                 value = models.support_to_scalar(value, self.config.support_size).item()
                 node.expand(
                     self.config.action_space,

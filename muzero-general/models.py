@@ -29,9 +29,11 @@ class MuZeroNetwork:
                 config.reduced_channels_reward,
                 config.reduced_channels_value,
                 config.reduced_channels_policy,
+                config.reduced_channels_reconstruction,
                 config.resnet_fc_reward_layers,
                 config.resnet_fc_value_layers,
                 config.resnet_fc_policy_layers,
+                config.resnet_fc_reconstruction_layers,
                 config.support_size,
                 config.downsample,
             )
@@ -374,6 +376,12 @@ class DynamicsNetwork(torch.nn.Module):
             self.block_output_size_reward, fc_reward_layers, full_support_size,
         )
 
+        # NOTE(kwong): reuse reward network hyperparameters, since we won't
+        # be tuning terminal-specific hyperparameters anyways.
+        self.fc_terminal = mlp(
+            self.block_output_size_reward, fc_reward_layers, 1,
+        )
+
     def forward(self, x):
         x = self.conv(x)
         x = self.bn(x)
@@ -384,7 +392,8 @@ class DynamicsNetwork(torch.nn.Module):
         x = self.conv1x1_reward(x)
         x = x.view(-1, self.block_output_size_reward)
         reward = self.fc(x)
-        return state, reward
+        terminal = self.fc_terminal(x)
+        return state, reward, terminal
 
 
 class PredictionNetwork(torch.nn.Module):
@@ -429,6 +438,36 @@ class PredictionNetwork(torch.nn.Module):
         return policy, value
 
 
+class ReconstructionNetwork(torch.nn.Module):
+    def __init__(
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        reduced_channels,
+        fc_reconstruction_layers,
+        block_output_size,
+    ):
+        super().__init__()
+        self.resblocks = torch.nn.ModuleList(
+            [ResidualBlock(num_channels) for _ in range(num_blocks)]
+        )
+
+        self.conv1x1 = torch.nn.Conv2d(num_channels, reduced_channels, 1)
+        self.upsample = torch.nn.Upsample(block_output_size, mode="bilinear")
+        self.conv_reconstruction = cnn3x3(
+            reduced_channels, fc_reconstruction_layers, observation_shape[0]
+        )
+
+    def forward(self, x):
+        for block in self.resblocks:
+            x = block(x)
+        reconstruction = self.conv1x1(x)
+        reconstruction = self.upsample(reconstruction)
+        reconstruction = self.conv_reconstruction(reconstruction)
+        return reconstruction
+
+
 class MuZeroResidualNetwork(AbstractNetwork):
     def __init__(
         self,
@@ -440,9 +479,11 @@ class MuZeroResidualNetwork(AbstractNetwork):
         reduced_channels_reward,
         reduced_channels_value,
         reduced_channels_policy,
+        reduced_channels_reconstruction,
         fc_reward_layers,
         fc_value_layers,
         fc_policy_layers,
+        fc_reconstruction_layers,
         support_size,
         downsample,
     ):
@@ -477,6 +518,12 @@ class MuZeroResidualNetwork(AbstractNetwork):
             )
             if downsample
             else (reduced_channels_policy * observation_shape[1] * observation_shape[2])
+        )
+
+        block_output_size_reconstruction = (
+            (math.ceil(observation_shape[1] / 16), math.ceil(observation_shape[2] / 16))
+            if downsample
+            else (observation_shape[1], observation_shape[2])
         )
 
         self.representation_network = torch.nn.DataParallel(
@@ -515,9 +562,24 @@ class MuZeroResidualNetwork(AbstractNetwork):
             )
         )
 
+        self.reconstruction_network = torch.nn.DataParallel(
+            ReconstructionNetwork(
+                observation_shape,
+                num_blocks,
+                num_channels,
+                reduced_channels_reconstruction,
+                fc_reconstruction_layers,
+                block_output_size_reconstruction,
+            )
+        )
+
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)
         return policy, value
+
+    def reconstruction(self, encoded_state):
+        reconstruction = self.reconstruction_network(encoded_state)
+        return reconstruction
 
     def representation(self, observation):
         encoded_state = self.representation_network(observation)
@@ -566,7 +628,7 @@ class MuZeroResidualNetwork(AbstractNetwork):
             action[:, :, None, None] * action_one_hot / self.action_space_size
         )
         x = torch.cat((encoded_state, action_one_hot), dim=1)
-        next_encoded_state, reward = self.dynamics_network(x)
+        next_encoded_state, reward, terminal = self.dynamics_network(x)
 
         # Scale encoded state between [0, 1] (See paper appendix Training)
         min_next_encoded_state = (
@@ -592,11 +654,12 @@ class MuZeroResidualNetwork(AbstractNetwork):
         next_encoded_state_normalized = (
             next_encoded_state - min_next_encoded_state
         ) / scale_next_encoded_state
-        return next_encoded_state_normalized, reward
+        return next_encoded_state_normalized, reward, terminal[..., 0]
 
     def initial_inference(self, observation):
         encoded_state = self.representation(observation)
         policy_logits, value = self.prediction(encoded_state)
+        reconstruction = self.reconstruction(encoded_state)
         # reward equal to 0 for consistency
         reward = torch.log(
             (
@@ -606,17 +669,22 @@ class MuZeroResidualNetwork(AbstractNetwork):
                 .to(observation.device)
             )
         )
+        terminal = torch.zeros((len(observation),), device=observation.device)
+
         return (
             value,
             reward,
+            terminal,
             policy_logits,
+            reconstruction,
             encoded_state,
         )
 
     def recurrent_inference(self, encoded_state, action):
-        next_encoded_state, reward = self.dynamics(encoded_state, action)
+        next_encoded_state, reward, terminal = self.dynamics(encoded_state, action)
         policy_logits, value = self.prediction(next_encoded_state)
-        return value, reward, policy_logits, next_encoded_state
+        reconstruction = self.reconstruction(next_encoded_state)
+        return value, reward, terminal, policy_logits, reconstruction, next_encoded_state
 
 
 ########### End ResNet ###########
@@ -635,6 +703,21 @@ def mlp(
     for i in range(len(sizes) - 1):
         act = activation if i < len(sizes) - 2 else output_activation
         layers += [torch.nn.Linear(sizes[i], sizes[i + 1]), act()]
+    return torch.nn.Sequential(*layers)
+
+
+def cnn3x3(
+    input_size,
+    layer_sizes,
+    output_size,
+    output_activation=torch.nn.Identity,
+    activation=torch.nn.ELU,
+):
+    sizes = [input_size] + layer_sizes + [output_size]
+    layers = []
+    for i in range(len(sizes) - 1):
+        act = activation if i < len(sizes) - 2 else output_activation
+        layers += [torch.nn.Conv2d(sizes[i], sizes[i + 1], kernel_size=3, padding=1, stride=1), act()]
     return torch.nn.Sequential(*layers)
 
 

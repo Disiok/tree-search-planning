@@ -64,9 +64,11 @@ class MuZeroConfig:
         self.reduced_channels_reward = 32  # Number of channels in reward head
         self.reduced_channels_value = 32  # Number of channels in value head
         self.reduced_channels_policy = 32  # Number of channels in policy head
+        self.reduced_channels_reconstruction = 32  # Number of channels in reconstruction head
         self.resnet_fc_reward_layers = [32]  # Define the hidden layers in the reward head of the dynamic network
         self.resnet_fc_value_layers = [32]  # Define the hidden layers in the value head of the prediction network
         self.resnet_fc_policy_layers = [32]  # Define the hidden layers in the policy head of the prediction network
+        self.resnet_fc_reconstruction_layers = [32]  # Define the hidden layers in the reconstruction head of the reconstruction network
 
         # Fully Connected Network
         self.encoding_size = 32
@@ -83,8 +85,7 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            'first_try', 
-            'rewardx5_repro_t4v2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
@@ -92,6 +93,9 @@ class MuZeroConfig:
         self.checkpoint_interval = 300  # 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 0.75  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.reward_loss_weight = 5.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.terminal_loss_weight = 0.0  # Scale the terminal loss 
+        self.reconstruction_loss_weight = 0.0  # Scale the reconstruction loss
+        self.mask_absorbing_states = False # whether to mask absorbing states' losses
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD

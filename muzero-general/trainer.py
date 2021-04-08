@@ -77,6 +77,8 @@ class Trainer:
                 value_loss,
                 reward_loss,
                 policy_loss,
+                terminal_loss,
+                reconstruction_loss
             ) = self.update_weights(batch)
 
             if self.config.PER:
@@ -103,6 +105,8 @@ class Trainer:
                     "value_loss": value_loss,
                     "reward_loss": reward_loss,
                     "policy_loss": policy_loss,
+                    "terminal_loss": terminal_loss,
+                    "reconstruction_loss": reconstruction_loss,
                 }
             )
 
@@ -133,6 +137,8 @@ class Trainer:
             target_reward,
             target_policy,
             weight_batch,
+            target_terminal,
+            target_reconstruction,
             gradient_scale_batch,
         ) = batch
 
@@ -148,12 +154,16 @@ class Trainer:
         target_value = torch.tensor(target_value).float().to(device)
         target_reward = torch.tensor(target_reward).float().to(device)
         target_policy = torch.tensor(target_policy).float().to(device)
+        target_terminal = torch.tensor(target_terminal).float().to(device)
+        target_reconstruction = torch.tensor(target_reconstruction).float().to(device)
         gradient_scale_batch = torch.tensor(gradient_scale_batch).float().to(device)
         # observation_batch: batch, channels, height, width
         # action_batch: batch, num_unroll_steps+1, 1 (unsqueeze)
         # target_value: batch, num_unroll_steps+1
         # target_reward: batch, num_unroll_steps+1
         # target_policy: batch, num_unroll_steps+1, len(action_space)
+        # target_terminal: batch, num_unroll_steps+1
+        # target_reconstruction: batch, num_unroll_steps+1, channels, width, height
         # gradient_scale_batch: batch, num_unroll_steps+1
 
         target_value = models.scalar_to_support(target_value, self.config.support_size)
@@ -164,33 +174,38 @@ class Trainer:
         # target_reward: batch, num_unroll_steps+1, 2*support_size+1
 
         ## Generate predictions
-        value, reward, policy_logits, hidden_state = self.model.initial_inference(
+        value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = self.model.initial_inference(
             observation_batch
         )
-        predictions = [(value, reward, policy_logits)]
+        predictions = [(value, reward, terminal_logits, policy_logits, reconstruction)]
         for i in range(1, action_batch.shape[1]):
-            value, reward, policy_logits, hidden_state = self.model.recurrent_inference(
-                hidden_state, action_batch[:, i]
+            value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = (
+                self.model.recurrent_inference(hidden_state, action_batch[:, i])
             )
             # Scale the gradient at the start of the dynamics function (See paper appendix Training)
             hidden_state.register_hook(lambda grad: grad * 0.5)
-            predictions.append((value, reward, policy_logits))
+            predictions.append((value, reward, terminal_logits, policy_logits, reconstruction))
         # predictions: num_unroll_steps+1, 3, batch, 2*support_size+1 | 2*support_size+1 | 9 (according to the 2nd dim)
 
         ## Compute losses
-        value_loss, reward_loss, policy_loss = (0, 0, 0)
-        value, reward, policy_logits = predictions[0]
+        value_loss, reward_loss, terminal_loss, policy_loss, reconstruction_loss = (0, 0, 0, 0, 0)
+        value, reward, terminal_logits, policy_logits, reconstruction = predictions[0]
         # Ignore reward loss for the first batch step
-        current_value_loss, _, current_policy_loss = self.loss_function(
+        current_value_loss, _, _, current_policy_loss, current_reconstruction_loss = self.loss_function(
             value.squeeze(-1),
             reward.squeeze(-1),
+            terminal_logits,
             policy_logits,
+            reconstruction,
             target_value[:, 0],
             target_reward[:, 0],
+            target_terminal[:, 0],
             target_policy[:, 0],
+            target_reconstruction[:, 0]
         )
         value_loss += current_value_loss
         policy_loss += current_policy_loss
+        reconstruction_loss += current_reconstruction_loss
         # Compute priorities for the prioritized replay (See paper appendix Training)
         pred_value_scalar = (
             models.support_to_scalar(value, self.config.support_size)
@@ -205,18 +220,24 @@ class Trainer:
         )
 
         for i in range(1, len(predictions)):
-            value, reward, policy_logits = predictions[i]
+            value, reward, terminal_logits, policy_logits, reconstruction = predictions[i]
             (
                 current_value_loss,
                 current_reward_loss,
+                current_terminal_loss,
                 current_policy_loss,
+                current_reconstruction_loss,
             ) = self.loss_function(
                 value.squeeze(-1),
                 reward.squeeze(-1),
+                terminal_logits,
                 policy_logits,
+                reconstruction,
                 target_value[:, i],
                 target_reward[:, i],
+                target_terminal[:, i],
                 target_policy[:, i],
+                target_reconstruction[:, i]
             )
 
             # Scale gradient by the number of unroll steps (See paper appendix Training)
@@ -226,13 +247,29 @@ class Trainer:
             current_reward_loss.register_hook(
                 lambda grad: grad / gradient_scale_batch[:, i]
             )
+            current_terminal_loss.register_hook(
+                lambda grad: grad / gradient_scale_batch[:, i]
+            )
             current_policy_loss.register_hook(
                 lambda grad: grad / gradient_scale_batch[:, i]
             )
+            current_reconstruction_loss.register_hook(
+                lambda grad: grad / gradient_scale_batch[:, i]
+            )
+
+            # ignore losses for terminal states
+            if hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states:
+                current_value_loss = current_value_loss * (1 - target_terminal[:, i])  # don't predict value of the first terminal state
+                current_reward_loss = current_reward_loss * (1 - target_terminal[:, i - 1])  # predict reward at the first terminal state
+                current_terminal_loss = current_terminal_loss * (1 - target_terminal[:, i - 1])  # predict terminal at the first terminal state
+                current_policy_loss = current_policy_loss * (1 - target_terminal[:, i])  # don't predict policy at first terminal state
+                current_reconstruction_loss = current_reconstruction_loss * (1 - target_terminal[:, i - 1])  # prediction reconstruction at first terminal state
 
             value_loss += current_value_loss
             reward_loss += current_reward_loss
+            terminal_loss += current_terminal_loss
             policy_loss += current_policy_loss
+            reconstruction_loss += current_reconstruction_loss
 
             # Compute priorities for the prioritized replay (See paper appendix Training)
             pred_value_scalar = (
@@ -248,7 +285,13 @@ class Trainer:
             )
 
         # Scale the value loss, paper recommends by 0.25 (See paper appendix Reanalyze)
-        loss = value_loss * self.config.value_loss_weight + self.config.reward_loss_weight * reward_loss + policy_loss
+        loss = (
+            value_loss * self.config.value_loss_weight
+            + reward_loss * self.config.reward_loss_weight
+            + terminal_loss * self.config.terminal_loss_weight
+            + policy_loss
+            + reconstruction_loss * self.config.reconstruction_loss_weight
+        )
         if self.config.PER:
             # Correct PER bias by using importance-sampling (IS) weights
             loss *= weight_batch
@@ -267,7 +310,9 @@ class Trainer:
             loss.item(),
             value_loss.mean().item() if torch.is_tensor(value_loss) else 0.,
             reward_loss.mean().item() if torch.is_tensor(reward_loss) else 0.,
+            terminal_loss.mean().item() if torch.is_tensor(terminal_loss) else 0.,
             policy_loss.mean().item() if torch.is_tensor(policy_loss) else 0.,
+            reconstruction_loss.mean().item() if torch.is_tensor(reconstruction_loss) else 0.,
         )
 
     def update_lr(self):
@@ -284,10 +329,14 @@ class Trainer:
     def loss_function(
         value,
         reward,
+        terminal_logits,
         policy_logits,
+        reconstruction,
         target_value,
         target_reward,
+        target_terminal,
         target_policy,
+        target_reconstruction,
     ):
         # Cross-entropy seems to have a better convergence than MSE
         value_loss = (-target_value * torch.nn.LogSoftmax(dim=1)(value)).sum(1)
@@ -295,4 +344,7 @@ class Trainer:
         policy_loss = (-target_policy * torch.nn.LogSoftmax(dim=1)(policy_logits)).sum(
             1
         )
-        return value_loss, reward_loss, policy_loss
+        terminal_loss = torch.nn.functional.binary_cross_entropy_with_logits(terminal_logits, target_terminal, reduction="none")
+        reconstruction_loss = torch.nn.functional.mse_loss(reconstruction, target_reconstruction, reduction="none")
+        reconstruction_loss = torch.mean(reconstruction_loss.view(reconstruction_loss.size(0), -1), dim=-1)
+        return value_loss, reward_loss, terminal_loss, policy_loss, reconstruction_loss
