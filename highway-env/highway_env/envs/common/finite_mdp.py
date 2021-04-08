@@ -97,8 +97,13 @@ def compute_ttc_grid(env: 'AbstractEnv',
     vehicle = vehicle or env.vehicle
     road_lanes = env.road.network.all_side_lanes(env.vehicle.lane_index)
     grid = np.zeros((vehicle.SPEED_COUNT, len(road_lanes), int(horizon / time_quantization)))
-    for speed_index in range(grid.shape[0]):
-        ego_speed = vehicle.index_to_speed(speed_index)
+    print('Ego speed', vehicle.speed)
+    print('Others speed', [other.speed for other in env.road.vehicles])
+    for speed_index, speed_offset in enumerate([-6, -3, 0, 3, 6]):
+    # for speed_index in range(grid.shape[0]):
+        # ego_speed = vehicle.index_to_speed(speed_index)
+        ego_speed = min(max(vehicle.SPEED_MIN, vehicle.speed + speed_offset), vehicle.SPEED_MAX) 
+        print('Eval speed', ego_speed)
         for other in env.road.vehicles:
             if (other is vehicle) or (ego_speed == other.speed):
                 continue
@@ -106,8 +111,8 @@ def compute_ttc_grid(env: 'AbstractEnv',
             collision_points = [(0, 1), (-margin, 0.5), (margin, 0.5)]
             for m, cost in collision_points:
                 distance = vehicle.lane_distance_to(other) + m
-                other_projected_speed = other.speed * np.dot(other.direction, vehicle.direction)
-                time_to_collision = distance / utils.not_zero(ego_speed - other_projected_speed)
+                # other_projected_speed = other.speed * np.dot(other.direction, vehicle.direction)
+                time_to_collision = distance / utils.not_zero(ego_speed - other.speed)
                 if time_to_collision < 0:
                     continue
                 if env.road.network.is_connected_road(vehicle.lane_index, other.lane_index,

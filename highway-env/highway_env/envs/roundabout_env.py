@@ -140,7 +140,7 @@ class RoundaboutEnv(AbstractEnv):
             pass
         MDPVehicle.SPEED_MIN = 0
         MDPVehicle.SPEED_MAX = 16
-        MDPVehicle.SPEED_COUNT = 3
+        MDPVehicle.SPEED_COUNT = 5
         self.road.vehicles.append(ego_vehicle)
         self.vehicle = ego_vehicle
 
