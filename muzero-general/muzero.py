@@ -407,6 +407,9 @@ class MuZero:
             num_tests (int): Number of games to average. Defaults to 1.
 
             num_gpus (int): Number of GPUs to use, 0 forces to use the CPU. Defaults to 0.
+        
+        Returns:
+            
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
@@ -426,9 +429,9 @@ class MuZero:
         self_play_worker.close_game.remote()
 
         if len(self.config.players) == 1:
-            result = numpy.mean([sum(history.reward_history) for history in results])
+            mean_total_reward = numpy.mean([sum(history.reward_history) for history in results])
         else:
-            result = numpy.mean(
+            mean_total_reward = numpy.mean(
                 [
                     sum(
                         reward
@@ -438,6 +441,14 @@ class MuZero:
                     for history in results
                 ]
             )
+        
+        mean_episode_length = numpy.mean([len(history.action_history) - 1] for history in results)
+
+        result = {
+            'mean_total_reward': mean_total_reward,
+            'mean_episode_length': mean_episode_length
+        }
+
         return result
 
 
