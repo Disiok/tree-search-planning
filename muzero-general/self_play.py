@@ -758,9 +758,10 @@ class AZMCTS(MCTS):
                     virtual_to_play = self.config.players[0]
 
             if not terminal:
-                state, _, _, _ = search_path[-2].hidden_state
-                next_state = _safe_deepcopy_env(state)
-                observation, reward, terminal, _ = next_state.step(action)
+                parent_state, _, _, _ = search_path[-2].hidden_state
+                parent_state_copy = _safe_deepcopy_env(parent_state)
+                observation, reward, terminal, _ = parent_state_copy.step(action)
+                next_state = parent_state_copy  # changed due to step above
                 next_hidden_state = (next_state, observation, action, terminal)
 
                 # first node in search_path (root) is already in observation_history
