@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH --ntasks=1                         # Number of workers.
 #SBATCH --cpus-per-task=16
-#SBATCH -J muzero-ttc-recon
+#SBATCH -J muzero-ttc-recon-mask
 #SBATCH --mem=40GB                          # Job Memory.
 #SBATCH -p t4v2
 #SBATCH --gres=gpu:1                       # Number of GPUs.
 #SBATCH -o /h/kelvin/exps/%J.out             # Where to save the output.
+#SBATCH --qos high                          # Up to 4 GPUs  with qos=high
 #SBATCH --mail-user=kelvinwong@cs.toronto.edu
 #SBATCH --mail-type=ALL
 
@@ -17,4 +18,4 @@ conda activate tsmp-cuda10
 export RAY_TEMP_DIR="/h/kelvin/scratch"
 
 cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
-python -u muzero_interactive.py highway_env_ttc_az_recon
+python -u muzero_interactive.py highway_env_ttc_flat_recon_mask
