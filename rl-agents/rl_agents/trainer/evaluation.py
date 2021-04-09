@@ -24,7 +24,7 @@ class Evaluation(object):
         The evaluation of an agent interacting with an environment to maximize its expected reward.
     """
 
-    OUTPUT_FOLDER = 'out'
+    OUTPUT_FOLDER = '../../out'
     SAVED_MODELS_FOLDER = 'saved_models'
     RUN_FOLDER = 'run_{}_{}'
     METADATA_FILE = 'metadata.{}.json'

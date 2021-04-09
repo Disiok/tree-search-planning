@@ -1,6 +1,0 @@
-{
-    "environments": ["configs/HighwayEnv/ttc_flat_env.json"],
-    "agents": [
-        "configs/HighwayEnv/agents/DQNAgent/dqn.json"
-    ]
-}
