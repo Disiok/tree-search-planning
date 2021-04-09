@@ -22,9 +22,9 @@ class CrossMergeEnv(AbstractEnv):
 
     COLLISION_REWARD: float = -3
     RIGHT_LANE_REWARD: float = 0.
-    HIGH_SPEED_REWARD: float = 0.2
+    HIGH_SPEED_REWARD: float = 0
     MERGING_SPEED_REWARD: float = -0.0
-    LANE_CHANGE_REWARD: float = -0.05
+    LANE_CHANGE_REWARD: float = 0.0
 
     @classmethod
     def default_config(cls) -> dict:
@@ -33,13 +33,13 @@ class CrossMergeEnv(AbstractEnv):
         cross_merge_config = {
             'road_length': 300,
             'num_lanes': 2,
-            'actor_density': 2,
-            'actor_speed_mean': 30,
-            'actor_speed_std': 7,
-            'goal_reward': 2,
+            'actor_density': 0.5,
+            'actor_speed_mean': 20,
+            'actor_speed_std': 2,
+            'actor_spawn_sep': 15,
+            'goal_reward': 1,
             'goal_radius': 3,
         }
-
         config.update(cross_merge_config)
 
         return config
@@ -47,8 +47,6 @@ class CrossMergeEnv(AbstractEnv):
     def _reward(self, action: int) -> float:
         """
         The vehicle is rewarded for driving with high speed on lanes to the right and avoiding collisions
-
-        But an additional altruistic penalty is also suffered if any vehicle on the merging lane has a low speed.
 
         :param action: the action performed
         :return: the reward of the state-action transition
@@ -61,12 +59,6 @@ class CrossMergeEnv(AbstractEnv):
         reward = self.COLLISION_REWARD * self.vehicle.crashed \
                  + self.RIGHT_LANE_REWARD * self.vehicle.lane_index[2] / 1 \
                  + self.HIGH_SPEED_REWARD * self.vehicle.speed_index / (self.vehicle.SPEED_COUNT - 1)
-
-        # Altruistic penalty
-        for vehicle in self.road.vehicles:
-            if vehicle.lane_index == ("b", "c", 2) and isinstance(vehicle, ControlledVehicle):
-                reward += self.MERGING_SPEED_REWARD * \
-                          (vehicle.target_speed - vehicle.speed) / vehicle.target_speed
 
         # Ego goal
         ego_position = self.vehicle.position
@@ -95,12 +87,14 @@ class CrossMergeEnv(AbstractEnv):
         self._make_road()
         self._make_vehicles()
 
-    def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0):
+    def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0, width=None):
         """
         Make parallel straight roads
         layout: [0, 1] x N 
         Return road nodes
         """
+        if width is None:
+            width = StraightLane.DEFAULT_WIDTH
 
         y = y0
         lanes = []
@@ -121,7 +115,7 @@ class CrossMergeEnv(AbstractEnv):
             else:
                 line_type.append(LineType.STRIPED)
 
-            lane = StraightLane([x0, y], [x0 + xl, y + yl], line_types=line_type)    
+            lane = StraightLane([x0, y], [x0 + xl, y + yl], line_types=line_type, width=width)    
             lanes.append(lane)
 
             y += StraightLane.DEFAULT_WIDTH
@@ -137,61 +131,60 @@ class CrossMergeEnv(AbstractEnv):
         net = RoadNetwork()
 
         # Highway lanes
-        lengths = [0.3, 0.15, 0.15, 0.15, 0.25]
+        lengths = [0.45, 0.1, 0.1, 0.1, 0.35]
         lengths = [l * self.config['road_length'] for l in lengths]
 
         self.road_len = sum(lengths)
         x = 0
         idx = 0
-        n_lanes=2
+        ydiff = 4
+        n_lanes = self.config['num_lanes']
 
         goal_positions = []
     
-        straights = self._make_straight_roads([1,1] * n_lanes, lengths[idx], 0, x0=0)
+        straights = self._make_straight_roads([1, 1] * n_lanes, lengths[idx], 0, x0=0, width=StraightLane.DEFAULT_WIDTH)
         for s in straights:
             net.add_lane("a", "b", s)
-        goal_positions.append(np.random.choice(straights).position(lengths[idx] * 0.8, 0))
+        # goal_positions.append(np.random.choice(straights[-1].position(lengths[idx] * 0.8, 0))
         
         # TODO clean this
         x += lengths[idx]
         idx += 1
-        diag0 = self._make_straight_roads([1] * n_lanes, lengths[idx], -4, x0=x)
-        diag1 = self._make_straight_roads([1] * n_lanes, lengths[idx], 4, x0=x, y0=StraightLane.DEFAULT_WIDTH * n_lanes)
+        diag0 = self._make_straight_roads([1] * n_lanes, lengths[idx], -ydiff, x0=x)
+        diag1 = self._make_straight_roads([1] * n_lanes, lengths[idx], ydiff, x0=x, y0=StraightLane.DEFAULT_WIDTH * n_lanes)
         
         for d in diag0:
             net.add_lane("b", "d0", d)
         for d in diag1:
             net.add_lane("b", "d1", d)
-        goal_positions.append(np.random.choice(diag0 + diag1).position(lengths[idx] * 0.8, 0))
+        #goal_positions.append(np.random.choice(diag0 + diag1).position(lengths[idx] * 0.8, 0))
 
         x += lengths[idx]
         idx += 1
-        straight0 = self._make_straight_roads([1] * n_lanes, lengths[idx], 0, x0=x, y0=-4)
-        straight1 = self._make_straight_roads([1] * n_lanes, lengths[idx], 0, x0=x, y0=4+StraightLane.DEFAULT_WIDTH * n_lanes)
+        straight0 = self._make_straight_roads([1] * n_lanes, lengths[idx], 0, x0=x, y0=-ydiff)
+        straight1 = self._make_straight_roads([1] * n_lanes, lengths[idx], 0, x0=x, y0=ydiff+StraightLane.DEFAULT_WIDTH * n_lanes)
         for s in straight0:
             net.add_lane("d0", "e0", s)
         for s in straight1:
             net.add_lane("d1", "e1", s)
-        goal_positions.append(np.random.choice(straight0 + straight1).position(lengths[idx] * 0.8, 0))
+        goal_positions.append(np.random.choice(straight1).position(lengths[idx] * 0.5, 0))
         
         x += lengths[idx]
         idx += 1
-        diag0 = self._make_straight_roads([1] * n_lanes, lengths[idx], 4, x0=x, y0=-4)
-        diag1 = self._make_straight_roads([1] * n_lanes, lengths[idx], -4, x0=x, y0=4+StraightLane.DEFAULT_WIDTH * n_lanes)
+        diag0 = self._make_straight_roads([1] * n_lanes, lengths[idx], ydiff, x0=x, y0=-ydiff)
+        diag1 = self._make_straight_roads([1] * n_lanes, lengths[idx], -ydiff, x0=x, y0=ydiff+StraightLane.DEFAULT_WIDTH * n_lanes)
         for d in diag0:
-            net.add_lane("e0", "f0", d)
+            net.add_lane("e0", "f", d)
         for d in diag1:
-            net.add_lane("e1", "f1", d)
-        goal_positions.append(np.random.choice(diag0 + diag1).position(lengths[idx] * 0.8, 0))
+            net.add_lane("e1", "f", d)
+        #goal_positions.append(np.random.choice(diag0 + diag1).position(lengths[idx] * 0.8, 0))
         
         x += lengths[idx]
         idx += 1
-        straights = self._make_straight_roads([1,1] * n_lanes, lengths[idx], 0, x0=x)
-        for s in straights[:n_lanes]:
-            net.add_lane("f0", "g", s)
-        for s in straights[n_lanes:]:
-            net.add_lane("f1", "g", s)
-        goal_positions.append(np.random.choice(straights).position(lengths[idx] * 0.8, 0))
+        straights = self._make_straight_roads([1, 1] * n_lanes, lengths[idx], 0, x0=x, width=StraightLane.DEFAULT_WIDTH)
+        for s in straights:
+            net.add_lane("f", "g", s)
+        goal_positions.append(straights[0].position(lengths[idx] * 0.9, 0))
 
         road = Road(network=net, np_random=self.np_random, record_history=self.config["show_trajectories"])
         
@@ -212,25 +205,32 @@ class CrossMergeEnv(AbstractEnv):
         :return: the ego-vehicle
         """
         road = self.road
-        ego_vehicle = self.action_type.vehicle_class(road,
-                                                     road.network.get_lane(("a", "b", 1)).position(30, 0),
-                                                     speed=30)
-        road.vehicles.append(ego_vehicle)
+        sep = self.config['actor_spawn_sep']
         
-        nv = int(self.config['actor_density'] * self.config['num_lanes'] * 2) 
-        n_per_lane = 3
+        ego_spawn = road.network.get_lane(('a', 'b', 0)).position(sep, 0)
+        ego_vehicle = self.action_type.vehicle_class(road,
+                                                     ego_spawn,
+                                                     speed=20)
+        road.vehicles.append(ego_vehicle)
 
-        # hardcoded spawning
-        ns = n_per_lane * 2 * self.config['num_lanes']
-        locs = list(range(ns))
-        locs.pop(2 * n_per_lane - 1)
+        spawns = []
 
-        for idx in range(nv):
-            loc = locs.pop(np.random.randint(len(locs)))
-            lane_idx = loc // n_per_lane
-            lane_pos = 30 * (loc % n_per_lane)
+        for lane in road.network.lanes_list():
+            for xi in range(int(lane.length / sep)):
+                pos = lane.position(xi * sep, 0)
+                if pos[0] * 1000 + pos[1] == ego_spawn[0] * 1000 + ego_spawn[1]:
+                    continue
+                if pos[0] > 120:
+                    continue
+                spawns.append(pos)
 
-            veh = IDMVehicle(road, road.network.get_lane(("a", "b", lane_idx)).position(lane_pos, 0), heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
+        nv = len(spawns) * self.config['actor_density']
+        nv = int(nv)
+        np.random.shuffle(spawns)
+        spawns = spawns[:nv]
+
+        for spawn in spawns:
+            veh = IDMVehicle(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
             road.vehicles.append(veh)
         
         self.vehicle = ego_vehicle
