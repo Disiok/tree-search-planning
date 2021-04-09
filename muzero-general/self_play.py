@@ -199,6 +199,10 @@ class SelfPlay:
                 game_history.observation_history.append(observation)
                 game_history.reward_history.append(reward)
                 game_history.to_play_history.append(self.game.to_play())
+                # NOTE(suo): keep track of how many times we interacted with the real environment
+                #            mcts_info['n_env_interactions'] is for environment interactions during MCTS for AlphaZero
+                #            extra + 1 for stepping with the final selected action
+                game_history.n_env_interactions_history.append(mcts_info['n_env_interactions'] + 1)
 
         if save_gif:
             self.game.save_gif()
@@ -401,6 +405,7 @@ class MCTS:
         extra_info = {
             "max_tree_depth": max_tree_depth,
             "root_predicted_value": root_predicted_value,
+            "n_env_interactions": 0  # MuZero does not interact with the environment during MCTS
         }
         return root, extra_info
 
@@ -536,6 +541,7 @@ class GameHistory:
         # For PER
         self.priorities = None
         self.game_priority = None
+        self.n_env_interactions_history = []
 
     def store_search_statistics(self, root, action_space):
         # Turn visit count from root into a policy
@@ -681,6 +687,7 @@ class AZMCTS(MCTS):
         override_root_with=None,
     ):
         r"""Run MCTS for a number of simulations."""
+        n_env_interactions = 0
         if override_root_with:
             root = override_root_with
             root_predicted_value = None
@@ -761,6 +768,7 @@ class AZMCTS(MCTS):
                 state, _, _, _ = search_path[-2].hidden_state
                 next_state = _safe_deepcopy_env(state)
                 observation, reward, terminal, _ = next_state.step(action)
+                n_env_interactions += 1
                 next_hidden_state = (next_state, observation, action, terminal)
 
                 # first node in search_path (root) is already in observation_history
@@ -795,5 +803,6 @@ class AZMCTS(MCTS):
         extra_info = {
             "max_tree_depth": max_tree_depth,
             "root_predicted_value": None,
+            "n_env_interactions": n_env_interactions,
         }
         return root, extra_info
