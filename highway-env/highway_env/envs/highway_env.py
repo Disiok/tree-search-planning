@@ -48,6 +48,38 @@ class HighwayEnv(AbstractEnv):
             "reward_speed_range": [20, 30],
             "offroad_terminal": False
         })
+        config.update(
+            {
+                'observation': {
+                    'type': 'FlatTimeToCollisionWithEgoVelocity',
+                    'horizon': 10,
+                    'num_lanes': 3,
+                    'num_speeds': 5,
+                },
+                'action': {'type': 'DiscreteMetaAction'},
+                'simulation_frequency': 15,
+                'policy_frequency': 1,
+                'other_vehicles_type': 'highway_env.vehicle.behavior.IDMVehicle',
+                'screen_width': 600,
+                'screen_height': 150,
+                'centering_position': [0.3, 0.5],
+                'scaling': 5.5,
+                'show_trajectories': False,
+                'render_agent': True,
+                'offscreen_rendering': False,
+                'manual_control': False,
+                'real_time_rendering': False,
+                'lanes_count': 4,
+                'controlled_vehicles': 1,
+                'initial_lane_id': None,
+                'duration': 40,
+                'ego_spacing': 2,
+                'vehicles_density': 1,
+                'collision_reward': -1,
+                'reward_speed_range': [20, 30],
+                'offroad_terminal': False
+            }
+        )
         return config
 
     def _reset(self) -> None:
