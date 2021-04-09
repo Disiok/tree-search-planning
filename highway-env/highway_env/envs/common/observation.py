@@ -94,7 +94,7 @@ class TimeToCollisionObservation(ObservationType):
         self.horizon = horizon
         self.num_lanes = num_lanes
         self.num_speeds = num_speeds
-        self.project_speed = True
+        self.project_speed = project_speed
 
     def space(self) -> spaces.Space:
         try:
