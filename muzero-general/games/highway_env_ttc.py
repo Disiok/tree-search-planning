@@ -77,6 +77,7 @@ class MuZeroConfig:
         self.fc_reward_layers = [32]  # Define the hidden layers in the reward network
         self.fc_value_layers = [32]  # Define the hidden layers in the value network
         self.fc_policy_layers = [32]  # Define the hidden layers in the policy network
+        self.fc_reconstruction_layers = [32]  # Define the hidden layers in the reconstruction network
 
 
 

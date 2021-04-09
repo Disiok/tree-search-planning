@@ -44,6 +44,9 @@ class MuZeroConfig:
         self.discount = 0.975  # 0.997  # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
 
+        # whether to use learned or prefect dynamics model
+        self.dynamics_model = "learned"  # Change to "perfect" for AlphaZero
+
         # Root prior exploration noise
         self.root_dirichlet_alpha = 0.25
         self.root_exploration_fraction = 0.25
@@ -65,9 +68,11 @@ class MuZeroConfig:
         self.reduced_channels_reward = 32  # Number of channels in reward head
         self.reduced_channels_value = 32  # Number of channels in value head
         self.reduced_channels_policy = 32  # Number of channels in policy head
+        self.reduced_channels_reconstruction = 32  # Number of channels in reconstruction head
         self.resnet_fc_reward_layers = [32]  # Define the hidden layers in the reward head of the dynamic network
         self.resnet_fc_value_layers = [32]  # Define the hidden layers in the value head of the prediction network
         self.resnet_fc_policy_layers = [32]  # Define the hidden layers in the policy head of the prediction network
+        self.resnet_fc_reconstruction_layers = [32]  # Define the hidden layers in the reconstruction head of the reconstruction network
 
         # Fully Connected Network
         self.encoding_size = 64
@@ -76,6 +81,7 @@ class MuZeroConfig:
         self.fc_reward_layers = [32]  # Define the hidden layers in the reward network
         self.fc_value_layers = [32]  # Define the hidden layers in the value network
         self.fc_policy_layers = [32]  # Define the hidden layers in the policy network
+        self.fc_reconstruction_layers = [32]  # Define the hidden layers in the reconstruction network
 
 
 
@@ -93,6 +99,9 @@ class MuZeroConfig:
         self.checkpoint_interval = 300  # 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 0.75  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.reward_loss_weight = 5.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.terminal_loss_weight = 0.0  # Scale the terminal loss 
+        self.reconstruction_loss_weight = 0.0  # Scale the reconstruction loss
+        self.mask_absorbing_states = False # whether to mask absorbing states' losses
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
