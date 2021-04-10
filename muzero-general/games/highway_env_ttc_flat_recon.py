@@ -16,6 +16,6 @@ class MuZeroConfig(_MuZeroConfig):
             datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
 
-        self.terminal_loss_weight = 1.0  # Scale the terminal loss 
+        self.terminal_loss_weight = 0.0  # Scale the terminal loss 
         self.reconstruction_loss_weight = 1.0  # Scale the reconstruction loss
         self.mask_absorbing_states = False  # whether to mask absorbing states' losses
