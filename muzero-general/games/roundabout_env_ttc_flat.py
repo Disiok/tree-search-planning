@@ -15,7 +15,7 @@ NUM_LANES = 3
 NUM_SPEEDS = 5
 HORIZON = 10
 PROJECT_SPEED = False
-
+FIXED_VELOCITY_GRID = True
 
 class MuZeroConfig:
     def __init__(self):
@@ -161,6 +161,7 @@ class Game(AbstractGame):
                     'num_lanes': NUM_LANES,
                     'num_speeds': NUM_SPEEDS,
                     'project_speed': PROJECT_SPEED,
+                    'fixed_velocity_grid': FIXED_VELOCITY_GRID,
                 },
                 "action": {
                     "type": "DiscreteMetaAction"
