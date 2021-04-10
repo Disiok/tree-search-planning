@@ -120,7 +120,8 @@ class TimeToCollisionObservation(ObservationType):
         v0 = grid.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
         vf = grid.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
         clamped_grid = padded_grid[v0:vf + 1, :, :]
-        return clamped_grid
+        idcs_used = np.repeat(np.arange(self.num_speeds), repeats.astype(int))[v0:vf + 1]
+        return clamped_grid, idcs_used
 
 
 class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
@@ -132,7 +133,7 @@ class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
         ego.SPEED_COUNT = self.num_speeds
 
         # Get spatial grid from TimeToCollisionObservation
-        spatial_grid = super().observe()
+        spatial_grid, speed_idcs_grid = super().observe()
 
         # Flatten grid
         flat_repr = spatial_grid.reshape(-1)
@@ -141,7 +142,7 @@ class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
         # Add relative velocity with the ones in the grid
         # Absolute velocity is not needed since there is always a velocity in the grid that is ego.SPEED_MIN
         ego_speeds = []
-        for speed_index in range(spatial_grid.shape[0]):
+        for speed_index in speed_idcs_grid:
             ego_eval_speed = ego.index_to_speed(speed_index)
             rel_speed_norm = (ego.speed - ego_eval_speed) / (ego.SPEED_MAX - ego.SPEED_MIN)
             ego_speeds.append(rel_speed_norm)
