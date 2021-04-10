@@ -10,6 +10,11 @@ import highway_env
 
 from .abstract_game import AbstractGame
 
+NUM_LANES = 3
+NUM_SPEEDS = 5
+HORIZON = 10
+PROJECT_SPEED = False
+
 
 class MuZeroConfig:
     def __init__(self):
@@ -21,7 +26,7 @@ class MuZeroConfig:
 
 
         ### Game
-        self.observation_shape = (3, 3, 10)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.observation_shape = (1, 1, NUM_SPEEDS * NUM_LANES * HORIZON + NUM_SPEEDS)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 1  # Number of previous observations and previous actions to add to the current observation
@@ -54,7 +59,7 @@ class MuZeroConfig:
 
 
         ### Network
-        self.network = "resnet"  # "resnet" / "fullyconnected"
+        self.network = "fullyconnected"  # "resnet" / "fullyconnected"
         self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
 
         # Residual Network
@@ -71,8 +76,8 @@ class MuZeroConfig:
         self.resnet_fc_reconstruction_layers = [32]  # Define the hidden layers in the reconstruction head of the reconstruction network
 
         # Fully Connected Network
-        self.encoding_size = 32
-        self.fc_representation_layers = [32]  # Define the hidden layers in the representation network
+        self.encoding_size = 64
+        self.fc_representation_layers = [64, 64, 32]
         self.fc_dynamics_layers = [32]  # Define the hidden layers in the dynamics network
         self.fc_reward_layers = [32]  # Define the hidden layers in the reward network
         self.fc_value_layers = [32]  # Define the hidden layers in the value network
@@ -152,36 +157,32 @@ class Game(AbstractGame):
     """
 
     def __init__(self, seed=None):
-        self.env = gym.make('highway-v0')
+        self.env = gym.make('roundabout-v0')
         self.env.configure(
             {
                 'observation': {
-                    'type': 'TimeToCollision',
-                    'horizon': 10,
+                    'type': 'FlatTimeToCollisionWithEgoVelocity',
+                    'horizon': HORIZON,
+                    'num_lanes': NUM_LANES,
+                    'num_speeds': NUM_SPEEDS,
+                    'project_speed': PROJECT_SPEED,
                 },
-                'action': {'type': 'DiscreteMetaAction'},
-                'simulation_frequency': 15,
-                'policy_frequency': 1,
-                'other_vehicles_type': 'highway_env.vehicle.behavior.IDMVehicle',
-                'screen_width': 600,
-                'screen_height': 150,
-                'centering_position': [0.3, 0.5],
-                'scaling': 5.5,
-                'show_trajectories': False,
-                'render_agent': True,
-                'offscreen_rendering': False,
-                'manual_control': False,
-                'real_time_rendering': False,
-                'lanes_count': 4,
-                'controlled_vehicles': 1,
-                'initial_lane_id': None,
-                'duration': 40,
-                'ego_spacing': 2,
-                'vehicles_density': 1,
-                'collision_reward': -1,
-                'reward_speed_range': [20, 30],
-                'offroad_terminal': False
-            }
+                "action": {
+                    "type": "DiscreteMetaAction"
+                },
+                "incoming_vehicle_destination": None,
+                "duration": 11,  # [s]
+                "simulation_frequency": 15,  # [Hz]
+                "policy_frequency": 1,  # [Hz]
+                "other_vehicles_type": "highway_env.vehicle.behavior.IDMVehicle",
+                "screen_width": 600,  # [px]
+                "screen_height": 600,  # [px]
+                "centering_position": [0.5, 0.6],
+                "scaling": 5.5,
+                "show_trajectories": False,
+                "render_agent": True,
+                "offscreen_rendering": False
+        }
         )
         self.env.reset()
         if seed is not None:

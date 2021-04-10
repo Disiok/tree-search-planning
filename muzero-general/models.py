@@ -17,6 +17,7 @@ class MuZeroNetwork:
                 config.fc_policy_layers,
                 config.fc_representation_layers,
                 config.fc_dynamics_layers,
+                config.fc_reconstruction_layers,
                 config.support_size,
             )
         elif config.network == "resnet":
@@ -91,11 +92,13 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
         fc_policy_layers,
         fc_representation_layers,
         fc_dynamics_layers,
+        fc_reconstruction_layers,
         support_size,
     ):
         super().__init__()
         self.action_space_size = action_space_size
         self.full_support_size = 2 * support_size + 1
+        self.observation_shape = observation_shape
 
         self.representation_network = torch.nn.DataParallel(
             mlp(
@@ -119,6 +122,9 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
         self.dynamics_reward_network = torch.nn.DataParallel(
             mlp(encoding_size, fc_reward_layers, self.full_support_size)
         )
+        self.dynamics_terminal_network = torch.nn.DataParallel(
+            mlp(encoding_size, fc_reward_layers, 1)
+        )
 
         self.prediction_policy_network = torch.nn.DataParallel(
             mlp(encoding_size, fc_policy_layers, self.action_space_size)
@@ -127,10 +133,23 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
             mlp(encoding_size, fc_value_layers, self.full_support_size)
         )
 
+        self.reconstruction_network = torch.nn.DataParallel(
+            mlp(
+                encoding_size,
+                fc_reconstruction_layers,
+                observation_shape[0] * observation_shape[1] * observation_shape[2]
+            )
+        )
+
     def prediction(self, encoded_state):
         policy_logits = self.prediction_policy_network(encoded_state)
         value = self.prediction_value_network(encoded_state)
         return policy_logits, value
+
+    def reconstruction(self, encoded_state):
+        reconstruction = self.reconstruction_network(encoded_state)
+        reconstruction = reconstruction.view(reconstruction.size(0), *self.observation_shape)
+        return reconstruction
 
     def representation(self, observation):
         encoded_state = self.representation_network(
@@ -159,6 +178,7 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
         next_encoded_state = self.dynamics_encoded_state_network(x)
 
         reward = self.dynamics_reward_network(next_encoded_state)
+        terminal = self.dynamics_terminal_network(next_encoded_state)
 
         # Scale encoded state between [0, 1] (See paper appendix Training)
         min_next_encoded_state = next_encoded_state.min(1, keepdim=True)[0]
@@ -169,11 +189,12 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
             next_encoded_state - min_next_encoded_state
         ) / scale_next_encoded_state
 
-        return next_encoded_state_normalized, reward
+        return next_encoded_state_normalized, reward, terminal[..., 0]
 
     def initial_inference(self, observation):
         encoded_state = self.representation(observation)
         policy_logits, value = self.prediction(encoded_state)
+        reconstruction = self.reconstruction(encoded_state)
         # reward equal to 0 for consistency
         reward = torch.log(
             (
@@ -183,18 +204,22 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
                 .to(observation.device)
             )
         )
+        terminal = torch.zeros((len(observation),), device=observation.device)
 
         return (
             value,
             reward,
+            terminal,
             policy_logits,
+            reconstruction,
             encoded_state,
         )
 
     def recurrent_inference(self, encoded_state, action):
-        next_encoded_state, reward = self.dynamics(encoded_state, action)
+        next_encoded_state, reward, terminal = self.dynamics(encoded_state, action)
         policy_logits, value = self.prediction(next_encoded_state)
-        return value, reward, policy_logits, next_encoded_state
+        reconstruction = self.reconstruction(next_encoded_state)
+        return value, reward, terminal, policy_logits, reconstruction, next_encoded_state
 
 
 ###### End Fully Connected #######

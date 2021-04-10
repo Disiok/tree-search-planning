@@ -765,9 +765,9 @@ class AZMCTS(MCTS):
                     virtual_to_play = self.config.players[0]
 
             if not terminal:
-                state, _, _, _ = search_path[-2].hidden_state
-                next_state = _safe_deepcopy_env(state)
-                observation, reward, terminal, _ = next_state.step(action)
+                parent_state_copy = _safe_deepcopy_env(parent_state)
+                observation, reward, terminal, _ = parent_state_copy.step(action)
+                next_state = parent_state_copy  # changed due to step above
                 n_env_interactions += 1
                 next_hidden_state = (next_state, observation, action, terminal)
 

@@ -289,7 +289,7 @@ class Trainer:
             value_loss * self.config.value_loss_weight
             + reward_loss * self.config.reward_loss_weight
             + terminal_loss * self.config.terminal_loss_weight
-            + policy_loss
+            + policy_loss * self.config.policy_loss_weight
             + reconstruction_loss * self.config.reconstruction_loss_weight
         )
         if self.config.PER:
