@@ -113,13 +113,13 @@ class TimeToCollisionObservation(ObservationType):
         l0 = grid.shape[1] + self.observer_vehicle.lane_index[2] - obs_lanes // 2
         lf = grid.shape[1] + self.observer_vehicle.lane_index[2] + obs_lanes // 2
         clamped_grid = padded_grid[:, l0:lf+1, :]
-        repeats = np.ones(clamped_grid.shape[0])
-        repeats[np.array([0, -1])] += clamped_grid.shape[0]
-        padded_grid = np.repeat(clamped_grid, repeats.astype(int), axis=0)
-        obs_speeds = self.num_speeds
-        v0 = grid.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
-        vf = grid.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
-        clamped_grid = padded_grid[v0:vf + 1, :, :]
+        # repeats = np.ones(clamped_grid.shape[0])
+        # repeats[np.array([0, -1])] += clamped_grid.shape[0]
+        # padded_grid = np.repeat(clamped_grid, repeats.astype(int), axis=0)
+        # obs_speeds = self.num_speeds
+        # v0 = grid.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
+        # vf = grid.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
+        # clamped_grid = padded_grid[v0:vf + 1, :, :]
         return clamped_grid
 
 
