@@ -9,11 +9,12 @@ import imageio
 import highway_env
 
 from .abstract_game import AbstractGame
+from rl_agents.trainer.monitor import MonitorV2
 
 NUM_LANES = 3
 NUM_SPEEDS = 5
 HORIZON = 10
-
+FIXED_VELOCITY_GRID = True
 
 class MuZeroConfig:
     def __init__(self):
@@ -145,8 +146,12 @@ class Game(AbstractGame):
     Game wrapper.
     """
 
-    def __init__(self, seed=None):
-        self.env = gym.make('highway-v0')
+    ENV_NAME = 'highway-v0'
+
+    def __init__(self, seed=None, monitor_path=None):
+        self.env = gym.make(self.ENV_NAME)
+        if monitor_path is not None:
+            self.env = MonitorV2(self.env, monitor_path, video_callable=False)
         self.env.configure(
             {
                 'observation': {
@@ -154,6 +159,7 @@ class Game(AbstractGame):
                     'horizon': HORIZON,
                     'num_lanes': NUM_LANES,
                     'num_speeds': NUM_SPEEDS,
+                    'fixed_velocity_grid': FIXED_VELOCITY_GRID,
                 },
                 'action': {'type': 'DiscreteMetaAction'},
                 'simulation_frequency': 15,
