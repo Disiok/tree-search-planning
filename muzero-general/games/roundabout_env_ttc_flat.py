@@ -97,6 +97,7 @@ class MuZeroConfig:
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 512 # Number of parts of games to train on at each training step
         self.checkpoint_interval = 300  # 10  # Number of training steps before using the model for self-playing
+        self.policy_loss_weight = 1.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.value_loss_weight = 0.75  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.reward_loss_weight = 5.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.terminal_loss_weight = 0.0  # Scale the terminal loss 
