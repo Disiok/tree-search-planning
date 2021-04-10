@@ -7,7 +7,6 @@ import torch
 import imageio
 
 import highway_env
-from rl_agents.trainer.monitor import MonitorV2
 
 from .abstract_game import AbstractGame
 
@@ -142,12 +141,9 @@ class Game(AbstractGame):
     """
     Game wrapper.
     """
-    ENV_NAME = 'highway-v0'
 
-    def __init__(self, seed=None, monitor_path=None):
-        self.env = gym.make(self.ENV_NAME)
-        if monitor_path is not None:
-            self.env = MonitorV2(self.env, monitor_path, video_callable=False)
+    def __init__(self, seed=None):
+        self.env = gym.make('highway-v0')
         self.env.configure(
             {
                 'observation': {
