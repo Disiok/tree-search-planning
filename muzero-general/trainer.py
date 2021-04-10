@@ -76,8 +76,8 @@ class Trainer:
                 total_loss,
                 value_loss,
                 reward_loss,
-                policy_loss,
                 terminal_loss,
+                policy_loss,
                 reconstruction_loss
             ) = self.update_weights(batch)
 
