@@ -18,4 +18,5 @@ conda activate tsmp-cuda10
 export RAY_TEMP_DIR="/h/kelvin/scratch"
 
 cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
-python -u muzero_interactive.py highway_env_ttc_flat_recon
+# python -u muzero_interactive.py highway_env_ttc_flat_recon
+python -u muzero_interactive.py roundabout_env_ttc_flat_recon
