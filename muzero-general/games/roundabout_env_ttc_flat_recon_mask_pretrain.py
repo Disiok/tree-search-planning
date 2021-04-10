@@ -15,7 +15,9 @@ class MuZeroConfig(_MuZeroConfig):
             "../results", os.path.basename(__file__)[:-3],
             datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
-        self.policy_loss_weight = 0.0  # do not train the policy!
         self.terminal_loss_weight = 1.0  # Scale the terminal loss 
         self.reconstruction_loss_weight = 1.0  # Scale the reconstruction loss
         self.mask_absorbing_states = True  # whether to mask absorbing states' losses
+
+        self.policy_loss_weight = 0.0  # do not train the policy!
+        self.uniform_policy = True  # use uniform policy during self play

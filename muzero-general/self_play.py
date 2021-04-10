@@ -338,6 +338,10 @@ class MCTS:
             assert set(legal_actions).issubset(
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
+
+            if hasattr(self.config, "uniform_policy") and self.config.uniform_policy:
+                policy_logits.zero_()  # change to uniform policy
+
             root.expand(
                 legal_actions,
                 to_play,
@@ -383,12 +387,15 @@ class MCTS:
             reward = models.support_to_scalar(reward, self.config.support_size).item()
             is_terminal = terminal.item() >= 0.  # hard threshold to determine terminal state
 
+            if hasattr(self.config, "uniform_policy") and self.config.uniform_policy:
+                policy_logits.zero_()  # change to uniform policy
+
             # only expand node if we're not at a terminal state
             # or if we don't actually use the is_terminal prediction
-            if (
-                not is_terminal
-                or not (hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states)
-            ):
+            if is_terminal and hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states:
+                self.backpropagate(search_path, 0., virtual_to_play, min_max_stats)
+                max_tree_depth = max(max_tree_depth, current_tree_depth)
+            else:
                 node.expand(
                     self.config.action_space,
                     virtual_to_play,
@@ -397,9 +404,6 @@ class MCTS:
                     hidden_state,
                 )
                 self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
-                max_tree_depth = max(max_tree_depth, current_tree_depth)
-            else:
-                self.backpropagate(search_path, 0., virtual_to_play, min_max_stats)
                 max_tree_depth = max(max_tree_depth, current_tree_depth)
 
         extra_info = {
