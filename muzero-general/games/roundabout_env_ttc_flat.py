@@ -9,6 +9,7 @@ import imageio
 import highway_env
 
 from .abstract_game import AbstractGame
+from rl_agents.trainer.monitor import MonitorV2
 
 NUM_LANES = 3
 NUM_SPEEDS = 5
@@ -146,8 +147,12 @@ class Game(AbstractGame):
     Game wrapper.
     """
 
-    def __init__(self, seed=None):
-        self.env = gym.make('roundabout-v0')
+    ENV_NAME = 'roundabout-v0'
+    
+    def __init__(self, seed=None, monitor_path=None):
+        self.env = gym.make(self.ENV_NAME)
+        if monitor_path is not None:
+            self.env = MonitorV2(self.env, monitor_path, video_callable=False)
         self.env.configure(
             {
                 'observation': {
