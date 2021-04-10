@@ -134,21 +134,22 @@ class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
         # Get spatial grid from TimeToCollisionObservation
         spatial_grid = super().observe()
 
-        # Flatten grid
-        flat_repr = spatial_grid.reshape(-1)
+        # # Flatten grid
+        # flat_repr = spatial_grid.reshape(-1)
 
 
-        # Add relative velocity with the ones in the grid
-        # Absolute velocity is not needed since there is always a velocity in the grid that is ego.SPEED_MIN
-        ego_speeds = []
-        for speed_index in range(spatial_grid.shape[0]):
-            ego_eval_speed = ego.index_to_speed(speed_index)
-            rel_speed_norm = (ego.speed - ego_eval_speed) / (ego.SPEED_MAX - ego.SPEED_MIN)
-            ego_speeds.append(rel_speed_norm)
+        # # Add relative velocity with the ones in the grid
+        # # Absolute velocity is not needed since there is always a velocity in the grid that is ego.SPEED_MIN
+        # ego_speeds = []
+        # for speed_index in range(spatial_grid.shape[0]):
+        #     ego_eval_speed = ego.index_to_speed(speed_index)
+        #     rel_speed_norm = (ego.speed - ego_eval_speed) / (ego.SPEED_MAX - ego.SPEED_MIN)
+        #     ego_speeds.append(rel_speed_norm)
 
-        flat_repr = np.concatenate([flat_repr, np.array(ego_speeds)])
+        # flat_repr = np.concatenate([flat_repr, np.array(ego_speeds)])
 
-        return flat_repr.reshape(1, 1, -1)
+        # return flat_repr.reshape(1, 1, -1)
+        return spatial_grid.reshape(1, 1, -1)
 
 
 class KinematicObservation(ObservationType):
