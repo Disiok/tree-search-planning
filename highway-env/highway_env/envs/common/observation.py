@@ -89,11 +89,12 @@ class GrayscaleObservation(ObservationType):
 
 
 class TimeToCollisionObservation(ObservationType):
-    def __init__(self, env: 'AbstractEnv', horizon: int = 10, num_lanes=3, num_speeds=3, **kwargs: dict) -> None:
+    def __init__(self, env: 'AbstractEnv', horizon: int = 10, num_lanes=3, num_speeds=3, project_speed=True, **kwargs: dict) -> None:
         super().__init__(env)
         self.horizon = horizon
         self.num_lanes = num_lanes
         self.num_speeds = num_speeds
+        self.project_speed = project_speed
 
     def space(self) -> spaces.Space:
         try:
@@ -105,7 +106,7 @@ class TimeToCollisionObservation(ObservationType):
         if not self.env.road:
             return np.zeros((self.num_speeds, self.num_lanes, int(self.horizon * self.env.config["policy_frequency"])))
         grid = compute_ttc_grid(self.env, vehicle=self.observer_vehicle,
-                                time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon)
+                                time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon, project_speed=self.project_speed)
         padding = np.ones(np.shape(grid))
         padded_grid = np.concatenate([padding, grid, padding], axis=1)
         obs_lanes = self.num_lanes
