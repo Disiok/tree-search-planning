@@ -19,6 +19,7 @@ class ReplayBuffer:
         self.buffer = copy.deepcopy(initial_buffer)
         self.num_played_games = initial_checkpoint["num_played_games"]
         self.num_played_steps = initial_checkpoint["num_played_steps"]
+        self.n_env_interactions = initial_checkpoint.get('n_env_interactions', config.num_simulations * self.num_played_steps)
         self.total_samples = sum(
             [len(game_history.root_values) for game_history in self.buffer.values()]
         )
@@ -53,6 +54,7 @@ class ReplayBuffer:
         self.buffer[self.num_played_games] = game_history
         self.num_played_games += 1
         self.num_played_steps += len(game_history.root_values)
+        self.n_env_interactions += sum(game_history.n_env_interactions_history) 
         self.total_samples += len(game_history.root_values)
 
         if self.config.replay_buffer_size < len(self.buffer):
@@ -63,6 +65,7 @@ class ReplayBuffer:
         if shared_storage:
             shared_storage.set_info.remote("num_played_games", self.num_played_games)
             shared_storage.set_info.remote("num_played_steps", self.num_played_steps)
+            shared_storage.set_info.remote("n_env_interactions", self.n_env_interactions)
 
     def get_buffer(self):
         return self.buffer

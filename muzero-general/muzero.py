@@ -117,6 +117,7 @@ class MuZero:
             "reconstruction_loss": 0,
             "num_played_games": 0,
             "num_played_steps": 0,
+            "n_env_interactions": 0,
             "num_reanalysed_games": 0,
             "terminate": False,
         }
@@ -286,6 +287,7 @@ class MuZero:
             "reconstruction_loss",
             "num_played_games",
             "num_played_steps",
+            "n_env_interactions",
             "num_reanalysed_games",
         ]
         info = ray.get(self.shared_storage_worker.get_info.remote(keys))
@@ -330,6 +332,9 @@ class MuZero:
                 )
                 writer.add_scalar("2.Workers/6.Learning_rate", info["lr"], counter)
                 writer.add_scalar(
+                    "2.Workers/3.Environment_interactions", info["n_env_interactions"], counter
+                )
+                writer.add_scalar(
                     "3.Loss/1.Total_weighted_loss", info["total_loss"], counter
                 )
                 writer.add_scalar("3.Loss/Value_loss", info["value_loss"], counter)
@@ -349,6 +354,7 @@ class MuZero:
                             "buffer": self.replay_buffer,
                             "num_played_games": self.checkpoint["num_played_games"],
                             "num_played_steps": self.checkpoint["num_played_steps"],
+                            "n_env_interactions": self.checkpoint["n_env_interactions"],
                             "num_reanalysed_games": self.checkpoint["num_reanalysed_games"],
                         },
                         open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
@@ -368,6 +374,7 @@ class MuZero:
                     "buffer": self.replay_buffer,
                     "num_played_games": self.checkpoint["num_played_games"],
                     "num_played_steps": self.checkpoint["num_played_steps"],
+                    "n_env_interactions": self.checkpoint["n_env_interactions"],
                     "num_reanalysed_games": self.checkpoint["num_reanalysed_games"],
                 },
                 open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
@@ -473,6 +480,9 @@ class MuZero:
                 self.checkpoint["num_played_steps"] = replay_buffer_infos[
                     "num_played_steps"
                 ]
+                self.checkpoint["n_env_interactions"] = replay_buffer_infos[
+                    "n_env_interactions"
+                ]
                 self.checkpoint["num_played_games"] = replay_buffer_infos[
                     "num_played_games"
                 ]
@@ -487,6 +497,7 @@ class MuZero:
                 )
                 self.checkpoint["training_step"] = 0
                 self.checkpoint["num_played_steps"] = 0
+                self.checkpoint["n_env_interactions"] = 0
                 self.checkpoint["num_played_games"] = 0
                 self.checkpoint["num_reanalysed_games"] = 0
 
