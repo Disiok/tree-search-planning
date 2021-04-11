@@ -383,3 +383,19 @@ CarRacing-v0:
   policy_kwargs: "dict(log_std_init=-2,
                        ortho_init=False,
                        )"
+
+highway-v0:
+  n_envs: 16
+  n_timesteps: !!float 1e5
+  policy: 'MlpPolicy'
+  batch_size: 32
+  n_steps: 256
+  learning_rate: !!float 2e-3
+
+roundabout-v0:
+  n_envs: 16
+  n_timesteps: !!float 1e5
+  policy: 'MlpPolicy'
+  batch_size: 32
+  n_steps: 256
+  learning_rate: !!float 2e-3
