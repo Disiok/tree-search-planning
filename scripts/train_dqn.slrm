@@ -16,9 +16,10 @@ source /h/suo/.bashrc
 conda activate treesearch
 
 cd /h/suo/dev/tree-search-planning/rl-agents/scripts
-python experiments.py benchmark benchmark_eval.json \
+python experiments.py evaluate \
+    configs/HighwayEnv/env_ttc_flat.json \
+    configs/HighwayEnv/agents/DQNAgent/ddqn.json \
     --name-from-config \
     --no-display \
     --episodes 500 \
-    --recover \
-    --test
+    --train

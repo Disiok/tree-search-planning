@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH --ntasks=1                           # Number of workers.
+#SBATCH --cpus-per-task=8
+#SBATCH -J benchmark_train                   # Job Name.
+#SBATCH --mem=32GB                          # Job Memory.
+#SBATCH -p gpu 
+#SBATCH --gres=gpu:2                       # Number of GPUs.
+#SBATCH -o /h/suo/experiments/rl-agent/%J.out             # Where to save the output.
+#SBATCH --mail-user=suo@cs.toronto.edu
+#SBATCH --mail-type=ALL
+
+echo Running on $(hostname)
+
+# setup env
+source /h/suo/.bashrc
+conda activate treesearch
+
+cd /h/suo/dev/tree-search-planning/rl-agents/scripts
+python experiments.py evaluate \
+    configs/HighwayEnv/env_ttc_flat.json \
+    configs/HighwayEnv/agents/DQNAgent/dqn.json \
+    --name-from-config \
+    --no-display \
+    --episodes 500 \
+    --train

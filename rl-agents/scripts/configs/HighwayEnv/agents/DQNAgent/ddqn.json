@@ -1,4 +1,10 @@
 {
     "base_config": "configs/HighwayEnv/agents/DQNAgent/dqn.json",
-    "double": true
+    "double": true,
+    "exploration": {
+        "method": "EpsilonGreedy",
+        "tau": 1000,
+        "temperature": 1.0,
+        "final_temperature": 0.05
+    }
 }

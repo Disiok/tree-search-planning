@@ -1,0 +1,9 @@
+{
+    "environments": ["configs/HighwayEnv/env_ttc_flat.json"],
+    "agents": [
+        "configs/HighwayEnv/agents/MDPGapEAgent/baseline.json",
+        "configs/HighwayEnv/agents/IntervalRobustPlannerAgent/opd.json",
+        "configs/HighwayEnv/agents/MCTSAgent/iterations10.json",
+        "configs/HighwayEnv/agents/MCTSWithPriorPolicyAgent/baseline.json"
+    ]
+}

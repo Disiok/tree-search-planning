@@ -16,8 +16,9 @@ source /h/suo/.bashrc
 conda activate treesearch
 
 cd /h/suo/dev/tree-search-planning/rl-agents/scripts
-python experiments.py benchmark benchmark_train.json \
+python experiments.py benchmark eval_planning.json \
     --name-from-config \
     --no-display \
-    --episodes 500 \
-    --train
+    --episodes 50 \
+    --recover \
+    --test
