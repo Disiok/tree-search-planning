@@ -18,5 +18,5 @@ conda activate tsmp-cuda10
 export RAY_TEMP_DIR="/h/kelvin/scratch"
 
 cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
-python -u muzero_interactive.py highway_env_ttc_flat_az_learned_dynamics /scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/muzero-general/results/highway_env_ttc_flat_recon_mask_pretrain/2021-04-11--03-40-26/model.checkpoint
-# python -u muzero_interactive.py roundabout_env_ttc_flat_az_learned_dynamics /scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/muzero-general/results/roundabout_env_ttc_flat_recon_mask_pretrain/2021-04-11--03-40-24/model.checkpoint
+# python -u muzero_interactive.py highway_env_ttc_flat_az_learned_dynamics /scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/muzero-general/results/highway_env_ttc_flat_recon_mask_pretrain/2021-04-11--03-40-26/model.checkpoint
+python -u muzero_interactive.py roundabout_env_ttc_flat_az_learned_dynamics /scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/muzero-general/results/roundabout_env_ttc_flat_recon_mask_pretrain/2021-04-11--03-40-24/model.checkpoint
