@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from highway_env import utils
-from highway_env.envs.common.finite_mdp import compute_ttc_grid
+from highway_env.envs.common.finite_mdp import compute_ttc_grid, compute_ttg_grid
 from highway_env.road.lane import AbstractLane
 from highway_env.utils import distance_to_circle
 from highway_env.vehicle.controller import MDPVehicle
@@ -155,6 +155,20 @@ class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
             return flat_repr.reshape(1, 1, -1)
         
         return spatial_grid.reshape(1, 1, -1)
+
+
+class TTCGWithVelocityObservation(FlatTimeToCollisionWithEgoVelocityObservation):
+
+    def observe(self) -> np.ndarray:
+        ttc_grid = super().observe()
+        ttg_grid = compute_ttg_grid(self.env, vehicle=self.observer_vehicle,
+                                        time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon, project_speed=self.project_speed)
+
+        ttg_grid = ttg_grid.reshape(1, 1, -1)
+
+        ttcg = np.concatenate((ttc_grid, ttg_grid), axis=-1)
+
+        return ttcg
 
 
 class KinematicObservation(ObservationType):
@@ -531,6 +545,8 @@ def observation_factory(env: 'AbstractEnv', config: dict) -> ObservationType:
         return TimeToCollisionObservation(env, **config)
     elif config["type"] == "FlatTimeToCollisionWithEgoVelocity":
         return FlatTimeToCollisionWithEgoVelocityObservation(env, **config)
+    elif config["type"] == "TTCGWithVelocity":
+        return TTCGWithVelocityObservation(env, **config)
     elif config["type"] == "Kinematics":
         return KinematicObservation(env, **config)
     elif config["type"] == "OccupancyGrid":

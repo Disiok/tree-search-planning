@@ -80,6 +80,58 @@ def finite_mdp(env: 'AbstractEnv',
         raise ModuleNotFoundError("The finite_mdp module is required for conversion. {}".format(e))
 
 
+def compute_ttg_grid(env: 'AbstractEnv',
+                     time_quantization: float,
+                     horizon: float,
+                     vehicle: Optional[Vehicle] = None,
+                     project_speed: bool = True) -> np.ndarray:
+    """
+    Compute the grid of predicted time-to-collision to each goal within the lane
+
+    For each ego-speed and lane.
+    :param env: environment
+    :param time_quantization: time step of a grid cell
+    :param horizon: time horizon of the grid
+    :param vehicle: the observer vehicle
+    :return: the time-co-collision grid, with axes SPEED x LANES x TIME
+    """
+    vehicle = vehicle or env.vehicle
+    road_lanes = env.road.network.all_side_lanes(env.vehicle.lane_index)
+    grid = np.zeros((vehicle.SPEED_COUNT, len(road_lanes), int(horizon / time_quantization)))
+    for speed_index in range(grid.shape[0]):
+        ego_speed = vehicle.index_to_speed(speed_index)
+        import pdb; pdb.set_trace()
+        for other in env.road.vehicles:
+            if (other is vehicle) or (ego_speed == other.speed):
+                continue
+            margin = other.LENGTH / 2 + vehicle.LENGTH / 2
+            collision_points = [(0, 1), (-margin, 0.5), (margin, 0.5)]
+            for m, cost in collision_points:
+                distance = vehicle.lane_distance_to(other) + m
+                if project_speed:
+                    other_projected_speed = other.speed * np.dot(other.direction, vehicle.direction)
+                else:
+                    other_projected_speed = other.speed
+                time_to_collision = distance / utils.not_zero(ego_speed - other_projected_speed)
+                if time_to_collision < 0:
+                    continue
+                if env.road.network.is_connected_road(vehicle.lane_index, other.lane_index,
+                                                      route=vehicle.route, depth=3):
+                    # Same road, or connected road with same number of lanes
+                    if len(env.road.network.all_side_lanes(other.lane_index)) == len(env.road.network.all_side_lanes(vehicle.lane_index)):
+                        lane = [other.lane_index[2]]
+                    # Different road of different number of lanes: uncertainty on future lane, use all
+                    else:
+                        lane = range(grid.shape[1])
+                    # Quantize time-to-collision to both upper and lower values
+                    for time in [int(time_to_collision / time_quantization),
+                                 int(np.ceil(time_to_collision / time_quantization))]:
+                        if 0 <= time < grid.shape[2]:
+                            # TODO: check lane overflow (e.g. vehicle with higher lane id than current road capacity)
+                            grid[speed_index, lane, time] = np.maximum(grid[speed_index, lane, time], cost)
+    return grid
+
+
 def compute_ttc_grid(env: 'AbstractEnv',
                      time_quantization: float,
                      horizon: float,
