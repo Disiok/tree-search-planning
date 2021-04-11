@@ -19,4 +19,5 @@ export RAY_TEMP_DIR="/h/kelvin/scratch"
 
 cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
 # python -u muzero_interactive.py highway_env_ttc_flat
-python -u muzero_interactive.py roundabout_env_ttc_flat
+# python -u muzero_interactive.py roundabout_env_ttc_flat
+python -u muzero_interactive.py highway_env_ttc_flat /h/kelvin/projects/mcts_planner/tsp/muzero-general/results/highway_env_ttc_flat/2021-04-10--23-59-24/model.checkpoint /h/kelvin/projects/mcts_planner/tsp/muzero-general/results/highway_env_ttc_flat/2021-04-10--23-59-24/replay_buffer.pkl

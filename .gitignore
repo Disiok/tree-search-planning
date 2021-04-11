@@ -1,6 +1,8 @@
 .vscode
 *.log
 muzero-general/results
+muzero-general/old_results
+muzero-general/debug
 muzero-general/out
 tensorboards/
 scp_tensorboard.sh
