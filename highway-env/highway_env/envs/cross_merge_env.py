@@ -20,7 +20,7 @@ class CrossMergeEnv(AbstractEnv):
     vehicles.
     """
 
-    COLLISION_REWARD: float = -3
+    COLLISION_REWARD: float = -3.
     RIGHT_LANE_REWARD: float = 0.
     HIGH_SPEED_REWARD: float = 0
     MERGING_SPEED_REWARD: float = -0.0
@@ -44,6 +44,10 @@ class CrossMergeEnv(AbstractEnv):
 
         return config
 
+    def step(self, *args, **kwargs):
+        self.prev_ego_pos = np.array(self.vehicle.position)
+        return super().step(*args, **kwargs)
+
     def _reward(self, action: int) -> float:
         """
         The vehicle is rewarded for driving with high speed on lanes to the right and avoiding collisions
@@ -62,21 +66,22 @@ class CrossMergeEnv(AbstractEnv):
 
         # Ego goal
         ego_position = self.vehicle.position
-        dists = []
 
-        for goal in self.goals:
+        # TODO need to check if goal was passed 
+        for idx, goal in enumerate(self.goals):
             goal_position = goal.position
-            dist = np.linalg.norm(ego_position - goal_position)
-            dists.append(dist)
-
-        dist = min(dists)
-
-        if dist < self.config['goal_radius']:
-            reward += self.config['goal_reward']
+            #dist = np.linalg.norm(ego_position - goal_position)
+            dist = point2line_dist(goal_position, self.prev_ego_pos, ego_position)    
+        
+            if dist < self.config['goal_radius']:
+                reward += self.config['goal_reward']
+                self.goals.pop(idx)
+                break
+        
+        return action_reward[action] + reward
 
         return utils.lmap(action_reward[action] + reward,
-                          [self.COLLISION_REWARD + self.MERGING_SPEED_REWARD,
-                            self.HIGH_SPEED_REWARD + self.RIGHT_LANE_REWARD],
+                          [self.COLLISION_REWARD, self.config['goal_reward']],
                           [0, 1])
 
     def _is_terminal(self) -> bool:
@@ -86,6 +91,7 @@ class CrossMergeEnv(AbstractEnv):
     def _reset(self) -> None:
         self._make_road()
         self._make_vehicles()
+        self.prev_ego_pos = None
 
     def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0, width=None):
         """
@@ -167,7 +173,8 @@ class CrossMergeEnv(AbstractEnv):
             net.add_lane("d0", "e0", s)
         for s in straight1:
             net.add_lane("d1", "e1", s)
-        goal_positions.append(np.random.choice(straight1).position(lengths[idx] * 0.5, 0))
+        #goal_positions.append(np.random.choice(straight1).position(lengths[idx] * 0.5, 0))
+        goal_positions.append(straight1[-1].position(lengths[idx] * 0.5, 0))
         
         x += lengths[idx]
         idx += 1
@@ -236,6 +243,19 @@ class CrossMergeEnv(AbstractEnv):
         self.vehicle = ego_vehicle
         
         return 
+
+
+def point2line_dist(p, v1, v2):
+    v1p = p - v1
+    v1v2 = v2 - v1
+    v1v2_norm = np.linalg.norm(v1v2)
+    v1p_proj = np.dot(v1p, v1v2) / v1v2_norm
+    
+    hdist = max(0, v1p_proj - v1v2_norm)
+    dist = np.sqrt(-(v1p_proj ** 2) + np.linalg.norm(v1p) ** 2 + hdist ** 2)
+        
+
+    return  dist
 
 
 register(
