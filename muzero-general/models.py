@@ -200,6 +200,33 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
 
 
 ##################################
+###### Start Stochastic #######
+
+
+class MuZeroStochastic(AbstractNetwork):
+    def dynamics(self, encoded_state, action):
+        """
+        We augment this function to return a categorical distribution over next states
+
+        Returns:
+            probs (list): probability of next state
+            next_encoded_state  (list): next states
+            reward (list): reward associated with each next state
+        """
+        raise NotImplementedError
+
+    def recurrent_inference(self, encoded_state, action):
+        raise NotImplementedError(
+            'This function should not be implemented, \
+            the tree search should call dynamics and prediction separately \
+            for clarity in the bi-level tree search process.')
+        
+
+###### End Stochastic #######
+##################################
+
+
+##################################
 ############# ResNet #############
 
 
