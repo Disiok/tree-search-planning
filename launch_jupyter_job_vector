@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH -p interactive
+#SBATCH --gres=gpu:1
+#SBATCH -c 4
+#SBATCH --mem=4G
+#SBATCH --job-name=test_jupyter
+#SBATCH --output=jupyter_notebook_%j.log
+#SBATCH --ntasks=1
+#SBATCH --time=03:00:00
+
+date;hostname;pwd
+
+cd $SLURM_SUBMIT_DIR
+. project.env
+. jupyter.env
+export XDG_RUNTIME_DIR=""
+jupyter notebook --ip 0.0.0.0 --port 8888

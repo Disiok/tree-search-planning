@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=16
+#SBATCH -J muzero-gputrain-test            # Job Name.
+#SBATCH --mem=40GB                          # Job Memory.
+#SBATCH -p p100 
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -o /h/sergio/exps/%J.out             # Where to save the output.
+#SBATCH --mail-user=sergio@cs.toronto.edu
+#SBATCH --mail-type=ALL
+
+echo Running on $(hostname)
+source /h/sergio/.bashrc
+
+. /h/sergio/envs/cuda11.env
+# conda activate tsmp
+conda activate tree-search-planning
+
+cd /h/sergio/tree-search-planning/muzero-general
+python -u muzero_tuning.py

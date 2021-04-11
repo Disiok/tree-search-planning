@@ -1,0 +1,8 @@
+numpy
+torch
+tensorboard
+gym
+ray
+seaborn
+nevergrad
+imageio
