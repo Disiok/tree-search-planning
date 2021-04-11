@@ -65,6 +65,16 @@ if __name__ == "__main__":
         muzero = MuZero(sys.argv[1])
         print(f'Saving results to {muzero.config.results_path}')
         muzero.train()
+    elif len(sys.argv) == 3:
+        # Train directly with "python muzero.py cartpole path_to_checkpoint"
+        print(f'Training kicked off for environment {sys.argv[1]}')
+        muzero = MuZero(sys.argv[1])
+
+        print(f"Loading checkpoint from {sys.argv[2]}")
+        muzero.load_model(checkpoint_path=sys.argv[2])
+
+        print(f'Saving results to {muzero.config.results_path}')
+        muzero.train()
     elif len(sys.argv) == 4:
         # Train directly with "python muzero.py cartpole path_to_checkpoint path_to_buffer"
         print(f'Training kicked off for environment {sys.argv[1]}')

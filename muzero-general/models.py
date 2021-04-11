@@ -141,6 +141,18 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
             )
         )
 
+    def freeze_dynamics(self):
+        for param in self.representation_network.parameters():
+            param.requires_grad_(False)
+        for param in self.dynamics_encoded_state_network.parameters():
+            param.requires_grad_(False)
+        for param in self.dynamics_reward_network.parameters():
+            param.requires_grad_(False)
+        for param in self.dynamics_terminal_network.parameters():
+            param.requires_grad_(False)
+        for param in self.reconstruction_network.parameters():
+            param.requires_grad_(False)
+
     def prediction(self, encoded_state):
         policy_logits = self.prediction_policy_network(encoded_state)
         value = self.prediction_value_network(encoded_state)
@@ -597,6 +609,14 @@ class MuZeroResidualNetwork(AbstractNetwork):
                 block_output_size_reconstruction,
             )
         )
+
+    def freeze_dynamics(self):
+        for param in self.representation_network.parameters():
+            param.requires_grad_(False)
+        for param in self.dynamics_network.parameters():
+            param.requires_grad_(False)
+        for param in self.reconstruction_network.parameters():
+            param.requires_grad_(False)
 
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)

@@ -506,6 +506,12 @@ class MuZero:
                 self.checkpoint["n_env_interactions"] = 0
                 self.checkpoint["num_played_games"] = 0
                 self.checkpoint["num_reanalysed_games"] = 0
+        else:
+            self.checkpoint["training_step"] = 0
+            self.checkpoint["num_played_steps"] = 0
+            self.checkpoint["n_env_interactions"] = 0
+            self.checkpoint["num_played_games"] = 0
+            self.checkpoint["num_reanalysed_games"] = 0
 
     def diagnose_model(self, horizon):
         """

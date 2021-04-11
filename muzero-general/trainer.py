@@ -28,6 +28,9 @@ class Trainer:
         self.model.to(torch.device("cuda" if self.config.train_on_gpu else "cpu"))
         self.model.train()
 
+        if hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics:
+            self.model.freeze_dynamics()
+
         self.training_step = initial_checkpoint["training_step"]
 
         if "cuda" not in str(next(self.model.parameters()).device):
@@ -183,7 +186,8 @@ class Trainer:
                 self.model.recurrent_inference(hidden_state, action_batch[:, i])
             )
             # Scale the gradient at the start of the dynamics function (See paper appendix Training)
-            hidden_state.register_hook(lambda grad: grad * 0.5)
+            if not (hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics):
+                hidden_state.register_hook(lambda grad: grad * 0.5)
             predictions.append((value, reward, terminal_logits, policy_logits, reconstruction))
         # predictions: num_unroll_steps+1, 3, batch, 2*support_size+1 | 2*support_size+1 | 9 (according to the 2nd dim)
 
@@ -241,21 +245,29 @@ class Trainer:
             )
 
             # Scale gradient by the number of unroll steps (See paper appendix Training)
-            current_value_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_reward_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_terminal_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_policy_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_reconstruction_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
+            if not (hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics):
+                current_value_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_reward_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_terminal_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_policy_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_reconstruction_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+            else:
+                current_value_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_policy_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
 
             # ignore losses for terminal states
             if hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states:
