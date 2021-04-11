@@ -189,14 +189,14 @@ def _main():
     ppo_parser.add_argument("--env-name", choices=["highway", "roundabout"], default="highway")
     ppo_parser.add_argument("--num-cpus", type=int, default=16)
 
-    ppo_parser.add_argument("--output-path", type=str, default="./results/ppo")
+    ppo_parser.add_argument("--output-path", type=str, default="./results/ppo2")
     ppo_parser.add_argument("--num-evaluation-episodes", type=int, default=50)
 
     ppo_parser.add_argument("--train", action="store_true", default=False)
-    ppo_parser.add_argument("--batch-size", type=int, default=32)
-    ppo_parser.add_argument("--buffer-size", type=int, default=256)
-    ppo_parser.add_argument("--num-transitions", type=int, default=50000)
-    ppo_parser.add_argument("--lr", type=float, default=2e-3)
+    ppo_parser.add_argument("--batch-size", type=int, default=64)
+    ppo_parser.add_argument("--buffer-size", type=int, default=512)
+    ppo_parser.add_argument("--num-transitions", type=int, default=100000)
+    ppo_parser.add_argument("--lr", type=float, default=1e-3)
     ppo_parser.add_argument("--log-interval", type=int, default=1)
 
     # A2C
@@ -205,13 +205,13 @@ def _main():
     a2c_parser.add_argument("--env-name", choices=["highway", "roundabout"], default="highway")
     a2c_parser.add_argument("--num-cpus", type=int, default=16)
 
-    a2c_parser.add_argument("--output-path", type=str, default="./results/a2c")
+    a2c_parser.add_argument("--output-path", type=str, default="./results/a2c2")
     a2c_parser.add_argument("--num-evaluation-episodes", type=int, default=50)
 
     a2c_parser.add_argument("--train", action="store_true", default=False)
-    a2c_parser.add_argument("--buffer-size", type=int, default=256)
-    a2c_parser.add_argument("--num-transitions", type=int, default=50000)
-    a2c_parser.add_argument("--lr", type=float, default=2e-3)
+    a2c_parser.add_argument("--buffer-size", type=int, default=512)
+    a2c_parser.add_argument("--num-transitions", type=int, default=100000)
+    a2c_parser.add_argument("--lr", type=float, default=1e-3)
     a2c_parser.add_argument("--log-interval", type=int, default=1)
 
     args = parser.parse_args()
