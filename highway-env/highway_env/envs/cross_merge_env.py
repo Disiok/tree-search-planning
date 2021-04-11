@@ -92,7 +92,7 @@ class CrossMergeEnv(AbstractEnv):
         self._make_road()
         self._make_vehicles()
         self.prev_ego_pos = None
-
+ 
     def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0, width=None):
         """
         Make parallel straight roads
@@ -216,8 +216,7 @@ class CrossMergeEnv(AbstractEnv):
         
         ego_spawn = road.network.get_lane(('a', 'b', 0)).position(sep, 0)
         ego_vehicle = self.action_type.vehicle_class(road,
-                                                     ego_spawn,
-                                                     speed=20)
+                                                     ego_spawn)
         road.vehicles.append(ego_vehicle)
 
         spawns = []
@@ -227,7 +226,7 @@ class CrossMergeEnv(AbstractEnv):
                 pos = lane.position(xi * sep, 0)
                 if pos[0] * 1000 + pos[1] == ego_spawn[0] * 1000 + ego_spawn[1]:
                     continue
-                if pos[0] > 120:
+                if pos[0] > 0.35 * self.config['road_length']:
                     continue
                 spawns.append(pos)
 
