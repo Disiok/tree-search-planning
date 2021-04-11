@@ -344,7 +344,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 writer.add_scalar("3.Loss/Reconstruction_loss", info["reconstruction_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}')
+                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Value Loss: {info["value_loss"]:.2f}. Reward Loss: {info["reward_loss"]:.2f}')
                 counter += 1
 
                 if counter % 1000 == 0 and self.config.save_model:

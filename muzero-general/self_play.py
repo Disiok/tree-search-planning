@@ -147,7 +147,14 @@ class SelfPlay:
 
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
-                    if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                    if hasattr(self.config, "mcts_pretrain") and self.config.mcts_pretrain:
+                        root, mcts_info = VMCTS(self.config).run(
+                            self.game,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+                    elif hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
                         root, mcts_info = AZMCTS(self.config).run(
                             self.model,
                             self.game,
@@ -217,7 +224,14 @@ class SelfPlay:
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
-            if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+            if hasattr(self.config, "mcts_pretrain") and self.config.mcts_pretrain:
+                root, mcts_info = VMCTS(self.config).run(
+                    self.game,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
+            elif hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
                 root, mcts_info = AZMCTS(self.config).run(
                     self.model,
                     self.game,
@@ -338,10 +352,6 @@ class MCTS:
             assert set(legal_actions).issubset(
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
-
-            if hasattr(self.config, "uniform_policy") and self.config.uniform_policy:
-                policy_logits.zero_()  # change to uniform policy
-
             root.expand(
                 legal_actions,
                 to_play,
@@ -386,9 +396,6 @@ class MCTS:
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
             is_terminal = terminal.item() >= 0.  # hard threshold to determine terminal state
-
-            if hasattr(self.config, "uniform_policy") and self.config.uniform_policy:
-                policy_logits.zero_()  # change to uniform policy
 
             # only expand node if we're not at a terminal state
             # or if we don't actually use the is_terminal prediction
@@ -811,3 +818,118 @@ class AZMCTS(MCTS):
             "n_env_interactions": n_env_interactions,
         }
         return root, extra_info
+
+
+class VMCTS(MCTS):
+    r"""Vanilla MCTS.
+
+    NOTE(kwong): This class works for HighwayEnv only.
+    """
+
+    def run(
+        self,
+        game,
+        legal_actions,
+        to_play,
+        add_exploration_noise,
+        override_root_with=None,
+    ):
+        r"""Run MCTS for a number of simulations."""
+        n_env_interactions = 0
+        if override_root_with:
+            root = override_root_with
+            root_predicted_value = None
+        else:
+            root = Node(0)
+            hidden_state = (game.env.simplify(), False)
+            policy_logits = torch.zeros((1, len(self.config.action_space)))
+            root.expand(
+                legal_actions,
+                to_play,
+                0.,  # no rewards at the root
+                policy_logits,
+                hidden_state,
+            )
+
+        if add_exploration_noise:
+            root.add_exploration_noise(
+                dirichlet_alpha=self.config.root_dirichlet_alpha,
+                exploration_fraction=self.config.root_exploration_fraction,
+            )
+
+        min_max_stats = MinMaxStats()
+
+        max_tree_depth = 0
+        for _ in range(self.config.num_simulations):
+            node = root
+
+            terminal = False
+            search_path = [node]
+            current_tree_depth = 0
+            virtual_to_play = to_play
+
+            while node.expanded() and not terminal:
+                current_tree_depth += 1
+                action, node = self.select_child(node, min_max_stats)
+                if node.expanded():
+                    _, terminal = node.hidden_state
+                search_path.append(node)
+
+                # Players play turn by turn
+                if virtual_to_play + 1 < len(self.config.players):
+                    virtual_to_play = self.config.players[virtual_to_play + 1]
+                else:
+                    virtual_to_play = self.config.players[0]
+
+            if not terminal:
+                parent_state, _ = search_path[-2].hidden_state
+                parent_state_copy = _safe_deepcopy_env(parent_state)
+                observation, reward, terminal, _ = parent_state_copy.step(action)
+                next_state = parent_state_copy  # changed due to step above
+                n_env_interactions += 1
+                next_hidden_state = (next_state, terminal)
+
+                policy_logits = torch.zeros((1, len(self.config.action_space)))
+                value, more_env_interactions = estimate_value_via_rollout(next_state, self.config)
+                n_env_interactions += more_env_interactions
+
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,  # reward of action leading to this node
+                    policy_logits,
+                    next_hidden_state,  # new hidden state
+                )
+            else:
+                value = 0.  # terminal states have no value
+
+            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+            max_tree_depth = max(max_tree_depth, current_tree_depth)
+
+        extra_info = {
+            "max_tree_depth": max_tree_depth,
+            "root_predicted_value": None,
+            "n_env_interactions": n_env_interactions,
+        }
+        return root, extra_info
+
+
+def estimate_value_via_rollout(state, config):
+    if config.num_rollout_steps is not None and config.num_rollout_steps == 0:
+        return 0.0, 0  # don't copy environment if not necessary
+
+    total_reward = 0.0
+    num_env_interactions = 0
+    state = _safe_deepcopy_env(state)
+
+    step = 0
+    while config.num_rollout_steps is None or step < config.num_rollout_steps:
+        action = numpy.random.choice(config.action_space)
+        _, reward, terminal, _ = state.step(action)
+        num_env_interactions += 1
+        total_reward += config.discount ** step * reward
+        step += 1
+        if terminal:
+            break
+
+    return total_reward, num_env_interactions
