@@ -19,6 +19,7 @@ import replay_buffer
 import self_play
 import self_play_local
 import self_play_stochastic
+import self_play_local_stochastic
 import shared_storage
 import trainer
 
@@ -190,7 +191,7 @@ class MuZero:
             ).remote(self.checkpoint, self.config)
 
         print('Initializing self-play workers')
-        if self.config.stochastic_dynamics:
+        if hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
             self.self_play_workers = [
                 self_play_stochastic.SelfPlay.options(
                     num_cpus=0,
@@ -248,7 +249,7 @@ class MuZero:
         Keep track of the training performance.
         """
         # Launch the test worker to get performance metrics
-        if self.config.stochastic_dynamics:
+        if hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
             self.test_worker = self_play_stochastic.SelfPlay.options(
                 num_cpus=0, num_gpus=num_gpus,
             ).remote(
@@ -436,7 +437,10 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        if hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
+            self_play_worker = self_play_local_stochastic.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        else:
+            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")

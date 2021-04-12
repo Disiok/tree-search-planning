@@ -401,7 +401,7 @@ class MCTS:
         At the end of a simulation, we propagate the evaluation all the way up the tree
         to the root.
         """
-        assert self.config.players == 1
+        assert len(self.config.players) == 1, f'Number of players should be 1, but is {len(self.config.players)}'
 
         for node in reversed(search_path):
             node.value_sum += value
@@ -549,9 +549,9 @@ class TransitionNode(Node):
         # but we currently defer that to the child node expand operation for consistency 
         # with previous behavior
         self.child_hidden_states = child_hidden_states
-        self.child_rewards = child_reward
+        self.child_rewards = child_rewards
 
-        for action, p in enumerate(transition_probs)
+        for action, p in enumerate(transition_probs):
             self.children[action] = StateNode(p)
 
 class GameHistory:
