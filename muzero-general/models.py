@@ -6,8 +6,22 @@ import torch
 
 class MuZeroNetwork:
     def __new__(cls, config):
-        if config.network == "fullyconnected":
+        stochastic_dynamics = hasattr(config, 'stochastic_dynamics') and config.stochastic_dynamics
+        if config.network == "fullyconnected" and not stochastic_dynamics:
             return MuZeroFullyConnectedNetwork(
+                config.observation_shape,
+                config.stacked_observations,
+                len(config.action_space),
+                config.encoding_size,
+                config.fc_reward_layers,
+                config.fc_value_layers,
+                config.fc_policy_layers,
+                config.fc_representation_layers,
+                config.fc_dynamics_layers,
+                config.support_size,
+            )
+        elif config.network == "fullyconnected" and stochastic_dynamics:
+            return MockMuZeroStochastic(
                 config.observation_shape,
                 config.stacked_observations,
                 len(config.action_space),
@@ -203,7 +217,7 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
 ###### Start Stochastic #######
 
 
-class MuZeroStochastic(AbstractNetwork):
+class MuZeroStochastic(MuZeroFullyConnectedNetwork):
     def dynamics(self, encoded_state, action):
         """
         We augment this function to return a categorical distribution over next states
@@ -221,6 +235,27 @@ class MuZeroStochastic(AbstractNetwork):
             the tree search should call dynamics and prediction separately \
             for clarity in the bi-level tree search process.')
         
+
+class MockMuZeroStochastic(MuZeroFullyConnectedNetwork):
+    def dynamics(self, encoded_state, action):
+        """
+        We augment this function to return a categorical distribution over next states
+
+        Returns:
+            probs (list): probability of next state
+            next_encoded_state  (list): next states
+            reward (list): reward associated with each next state
+        """
+        next_encoded_state, reward = super().dynamics(encoded_state, action)
+
+        return [1.0], [next_encoded_state], [reward]
+
+    def recurrent_inference(self, encoded_state, action):
+        raise NotImplementedError(
+            'This function should not be implemented, \
+            the tree search should call dynamics and prediction separately \
+            for clarity in the bi-level tree search process.')
+
 
 ###### End Stochastic #######
 ##################################
