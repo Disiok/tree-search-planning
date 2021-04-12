@@ -472,7 +472,7 @@ class MuZero:
         # Load checkpoint
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
-                self.checkpoint = torch.load(checkpoint_path)
+                self.checkpoint = torch.load(checkpoint_path, map_location="cpu")
                 print(f"\nUsing checkpoint from {checkpoint_path}")
             else:
                 print(f"\nThere is no model saved in {checkpoint_path}.")
