@@ -334,7 +334,7 @@ class MCTS:
 
             while node.expanded():
                 current_tree_depth += 1
-                action, node = node.select_child(min_max_stats, self.config)
+                branch, node = node.select_child(min_max_stats, self.config)
                 search_path.append(node)
 
                 # Players play turn by turn
@@ -346,11 +346,12 @@ class MCTS:
             parent = search_path[-2]
             if isinstance(node, StateNode):
                 # in other words, the parent is a TransitionNode
+                action = branch  # branching at a StateNode is an action
 
                 # A transition node will store the hidden state and reward of its child nodes
                 # we just need to retrieve it here
-                hidden_state = parent.child_hidden_states[action]
-                reward = parent.child_rewards[action]
+                hidden_state = parent.children_hidden_states[action]
+                reward = parent.children_rewards[action]
 
                 policy_logits, value = model.prediction(hidden_state)
 
@@ -367,16 +368,18 @@ class MCTS:
                 self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
             elif isinstance(node, TransitionNode):
                 # in other words, the parent is a StateNode
-                probs, child_hidden_states, child_rewards = model.dynamics(
+                transition = branch  # branching at a TransitionNode is a environment transition
+
+                probs, children_hidden_states, children_rewards = model.dynamics(
                     parent.hidden_state, 
-                    torch.tensor([[action]]).to(parent.hidden_state.device),
+                    torch.tensor([[transition]]).to(parent.hidden_state.device),
                 )
 
                 node.expand(
                     virtual_to_play,
                     probs,
-                    child_hidden_states, 
-                    child_rewards,
+                    children_hidden_states, 
+                    children_rewards,
                 )
                 # TODO: what is the value supposed to be for a transition node? 
                 #       It doesn't have a value
@@ -387,7 +390,7 @@ class MCTS:
             max_tree_depth = max(max_tree_depth, current_tree_depth)
 
         extra_info = {
-            "max_tree_depth": max_tree_depth,
+            "max_tree_depth": max_tree_depth // 2 ,
             "root_predicted_value": root_predicted_value,
         }
         return root, extra_info
@@ -428,17 +431,6 @@ class Node:
         if self.visit_count == 0:
             return 0
         return self.value_sum / self.visit_count
-
-    def add_exploration_noise(self, dirichlet_alpha, exploration_fraction):
-        """
-        At the start of each search, we add dirichlet noise to the prior of the root to
-        encourage the search to explore new actions.
-        """
-        actions = list(self.children.keys())
-        noise = numpy.random.dirichlet([dirichlet_alpha] * len(actions))
-        frac = exploration_fraction
-        for a, n in zip(actions, noise):
-            self.children[a].prior = self.children[a].prior * (1 - frac) + n * frac
 
 
 class StateNode(Node):
@@ -504,12 +496,24 @@ class StateNode(Node):
 
         return prior_score + value_score
 
+    def add_exploration_noise(self, dirichlet_alpha, exploration_fraction):
+        """
+        At the start of each search, we add dirichlet noise to the prior of the root to
+        encourage the search to explore new actions.
+        """
+        actions = list(self.children.keys())
+        noise = numpy.random.dirichlet([dirichlet_alpha] * len(actions))
+        frac = exploration_fraction
+        for a, n in zip(actions, noise):
+            self.children[a].prior = self.children[a].prior * (1 - frac) + n * frac
+
+
 class TransitionNode(Node):
     def __init__(self, prior):
         super().__init__(prior)
 
-        self.child_hidden_states = []
-        self.child_rewards = []
+        self.children_hidden_states = []
+        self.children_rewards = []
 
     def select_child(self, min_max_stats, config):
         """
@@ -520,7 +524,7 @@ class TransitionNode(Node):
             child (StateNode)
             
         """
-        # TODO: randomly sample transitions for now. 
+        # TODO: uniformly sample transitions for now. 
         # We probably want to do something between random sampling and
         # distribution produced by the dynamics model
         # to balance between exploration and exploitation
@@ -529,7 +533,7 @@ class TransitionNode(Node):
         ])
         return action, self.children[action]
 
-    def expand(self, to_play, transition_probs, child_hidden_states, child_rewards):
+    def expand(self, to_play, transition_probs, children_hidden_states, children_rewards):
         """
         We expand a node using the value, reward and policy prediction obtained from the
         neural network.
@@ -544,8 +548,8 @@ class TransitionNode(Node):
         # construct the child (i.e. state) nodes with their hidden states and rewards
         # but we currently defer that to the child node expand operation for consistency 
         # with previous behavior
-        self.child_hidden_states = child_hidden_states
-        self.child_rewards = child_reward
+        self.children_hidden_states = children_hidden_states
+        self.children_rewards = child_reward
 
         for action, p in enumerate(transition_probs)
             self.children[action] = StateNode(p)
