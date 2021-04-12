@@ -6,7 +6,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.lane import LineType, StraightLane, SineLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.vehicle.behavior import IDMVehicle
+from highway_env.vehicle.behavior import *
 from highway_env.vehicle.objects import Obstacle, Landmark
 
 
@@ -46,6 +46,10 @@ class CrossMergeEnv(AbstractEnv):
 
     def step(self, *args, **kwargs):
         self.prev_ego_pos = np.array(self.vehicle.position)
+        n_crashed = self._other_crashed()
+        if n_crashed > 0:
+            print(f"{n_crashed} othere vehicles crashed")
+        
         return super().step(*args, **kwargs)
 
     def _reward(self, action: int) -> float:
@@ -67,7 +71,6 @@ class CrossMergeEnv(AbstractEnv):
         # Ego goal
         ego_position = self.vehicle.position
 
-        # TODO need to check if goal was passed 
         for idx, goal in enumerate(self.goals):
             goal_position = goal.position
             #dist = np.linalg.norm(ego_position - goal_position)
@@ -80,13 +83,12 @@ class CrossMergeEnv(AbstractEnv):
         
         return action_reward[action] + reward
 
-        return utils.lmap(action_reward[action] + reward,
-                          [self.COLLISION_REWARD, self.config['goal_reward']],
-                          [0, 1])
-
     def _is_terminal(self) -> bool:
         """The episode is over when a collision occurs or when the access ramp has been passed."""
         return self.vehicle.crashed or self.vehicle.position[0] > self.road_len
+
+    def _other_crashed(self) -> int:
+        return sum([v.crashed for v in self.road.vehicles])
 
     def _reset(self) -> None:
         self._make_road()
@@ -236,7 +238,7 @@ class CrossMergeEnv(AbstractEnv):
         spawns = spawns[:nv]
 
         for spawn in spawns:
-            veh = IDMVehicle(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
+            veh = SelfishRecklessIDMVehicle(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
             road.vehicles.append(veh)
         
         self.vehicle = ego_vehicle

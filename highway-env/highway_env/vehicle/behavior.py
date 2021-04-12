@@ -297,6 +297,29 @@ class IDMVehicle(ControlledVehicle):
         return acceleration
 
 
+class SelfishRecklessIDMVehicle(IDMVehicle):
+    # this vehicle should lane change very recklessly
+    LANE_CHANGE_MIN_ACC_GAIN = 0.01
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 5.0
+
+class SelfishSafeIDMVehicle(IDMVehicle):
+    # this vehicle wants to go fast, but will consider making others hard brake
+    LANE_CHANGE_MIN_ACC_GAIN = 0.01
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 1.0
+
+class PoliteIDMVehicle(IDMVehicle):
+    # this vehicle is same as default IDM, but considers others
+    POLITENESS = 1.0
+
+class PoliteSafeIDMVehicle(IDMVehicle):
+    # polite wrt to acceleration changes and considers others braking
+    POLITENESS = 1.0
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 1.0
+
+class SameLaneIDMVehicle(IDMVehicle):
+    # this vehicle should never change
+    LANE_CHANGE_MAX_BREAKING_IMPOSED = -999.0
+
 class LinearVehicle(IDMVehicle):
 
     """A Vehicle whose longitudinal and lateral controllers are linear with respect to parameters."""
