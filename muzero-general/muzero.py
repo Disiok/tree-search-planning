@@ -18,6 +18,7 @@ import models
 import replay_buffer
 import self_play
 import self_play_local
+import self_play_stochastic
 import shared_storage
 import trainer
 
@@ -189,15 +190,26 @@ class MuZero:
             ).remote(self.checkpoint, self.config)
 
         print('Initializing self-play workers')
-        self.self_play_workers = [
-            self_play.SelfPlay.options(
-                num_cpus=0,
-                num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
-            ).remote(
-                self.checkpoint, self.Game, self.config, self.config.seed + seed,
-            )
-            for seed in range(self.config.num_workers)
-        ]
+        if self.config.stochastic_dynamics:
+            self.self_play_workers = [
+                self_play_stochastic.SelfPlay.options(
+                    num_cpus=0,
+                    num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                ).remote(
+                    self.checkpoint, self.Game, self.config, self.config.seed + seed,
+                )
+                for seed in range(self.config.num_workers)
+            ]
+        else:
+            self.self_play_workers = [
+                self_play.SelfPlay.options(
+                    num_cpus=0,
+                    num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                ).remote(
+                    self.checkpoint, self.Game, self.config, self.config.seed + seed,
+                )
+                for seed in range(self.config.num_workers)
+            ]
 
         # Launch workers
         # NOTE(sergio): why is a list comprehension used here?
@@ -236,14 +248,24 @@ class MuZero:
         Keep track of the training performance.
         """
         # Launch the test worker to get performance metrics
-        self.test_worker = self_play.SelfPlay.options(
-            num_cpus=0, num_gpus=num_gpus,
-        ).remote(
-            self.checkpoint,
-            self.Game,
-            self.config,
-            self.config.seed + self.config.num_workers,
-        )
+        if self.config.stochastic_dynamics:
+            self.test_worker = self_play_stochastic.SelfPlay.options(
+                num_cpus=0, num_gpus=num_gpus,
+            ).remote(
+                self.checkpoint,
+                self.Game,
+                self.config,
+                self.config.seed + self.config.num_workers,
+            )
+        else:
+            self.test_worker = self_play.SelfPlay.options(
+                num_cpus=0, num_gpus=num_gpus,
+            ).remote(
+                self.checkpoint,
+                self.Game,
+                self.config,
+                self.config.seed + self.config.num_workers,
+            )
         self.test_worker.continuous_self_play.remote(
             self.shared_storage_worker, None, True
         )
