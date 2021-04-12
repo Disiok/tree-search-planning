@@ -116,52 +116,47 @@ def hyperparameter_search(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        # Train directly with "python muzero.py cartpole"
-        print(f'Training kicked off for environment {sys.argv[1]}')
-        muzero = MuZero(sys.argv[1])
-        muzero.train()
-    else:
-        # Initialize MuZero
-        game_name = "highway_env"
-        muzero = MuZero(game_name)
 
-        # Define here the parameters to tune
-        # Parametrization documentation: https://facebookresearch.github.io/nevergrad/parametrization.html
-        muzero.terminate_workers()
-        del muzero
-        budget = 30
-        parallel_experiments = 10
-        num_tests = 40
-        parametrization = nevergrad.p.Dict(
-            # lr_init=nevergrad.p.Log(lower=0.005, upper=0.01),
-            # lr_decay_rate=nevergrad.p.Scalar(lower=0.1, upper=0.9),
-            # lr_decay_steps = nevergrad.p.Log(lower=5e3, upper=3e4).set_integer_casting(),
-            # discount=nevergrad.p.Scalar(lower=0.95, upper=0.9999),
-            # td_steps=nevergrad.p.Scalar(lower=1, upper=10).set_integer_casting(),
-            # num_simulations=nevergrad.p.Log(lower=1, upper=100).set_integer_casting(),
-            # checkpoint_interval=nevergrad.p.Log(lower=10, upper=1000).set_integer_casting(),
-            # batch_size=nevergrad.p.Choice([256, 512]),
-            # PER=nevergrad.p.Choice([True, False]),
-            # PER_alpha=nevergrad.p.Scalar(lower=0.0, upper=1.0),
-            # value_loss_weight=nevergrad.p.Scalar(lower=0.5, upper=1.0),
-            # optimizer=nevergrad.p.Choice(['Adam', 'SGD']),
-            # use_last_model_value=nevergrad.p.Choice([True, False]),
-            # stacked_observations=nevergrad.p.Choice([1, 5]),
-            # ratio=nevergrad.p.Choice([None, 1.5]),
-            # support_size=nevergrad.p.Choice([10, 300]),
-            # num_unroll_steps=nevergrad.p.Scalar(lower=1, upper=15).set_integer_casting(),
-            # weight_decay=nevergrad.p.Choice([0.0, 1e-4]),
-            # root_dirichlet_alpha = nevergrad.p.Scalar(lower=0.0, upper=5.0),
-            # root_exploration_fraction = nevergrad.p.Scalar(lower=0.0, upper=1.0),
-            support_size = nevergrad.p.Choice([2, 5, 10, 50, 100]),
-        )
+    # Initialize MuZero
+    game_name = sys.argv[1]
+    muzero = MuZero(game_name)
 
-        print("Searching hyperparameters")
-        best_hyperparameters = hyperparameter_search(
-            game_name, parametrization, budget, parallel_experiments, num_tests
-        )
-        muzero = MuZero(game_name, best_hyperparameters)
-        print("\nDone")
+    # Define here the parameters to tune
+    # Parametrization documentation: https://facebookresearch.github.io/nevergrad/parametrization.html
+    muzero.terminate_workers()
+    del muzero
+    budget = 30
+    parallel_experiments = 10
+    num_tests = 40
+    parametrization = nevergrad.p.Dict(
+        lr_init=nevergrad.p.Log(lower=0.005, upper=0.01),
+        # lr_decay_rate=nevergrad.p.Scalar(lower=0.1, upper=0.9),
+        # lr_decay_steps = nevergrad.p.Log(lower=5e3, upper=3e4).set_integer_casting(),
+        discount=nevergrad.p.Scalar(lower=0.95, upper=0.9999),
+        td_steps=nevergrad.p.Scalar(lower=1, upper=10).set_integer_casting(),
+        num_simulations=nevergrad.p.Log(lower=1, upper=50).set_integer_casting(),
+        # checkpoint_interval=nevergrad.p.Log(lower=10, upper=1000).set_integer_casting(),
+        # batch_size=nevergrad.p.Choice([256, 512]),
+        # PER=nevergrad.p.Choice([True, False]),
+        # PER_alpha=nevergrad.p.Scalar(lower=0.0, upper=1.0),
+        value_loss_weight=nevergrad.p.Scalar(lower=0.25, upper=1.0),
+        # optimizer=nevergrad.p.Choice(['Adam', 'SGD']),
+        # use_last_model_value=nevergrad.p.Choice([True, False]),
+        # stacked_observations=nevergrad.p.Choice([1, 5]),
+        # ratio=nevergrad.p.Choice([None, 1.5]),
+        # support_size=nevergrad.p.Choice([10, 300]),
+        num_unroll_steps=nevergrad.p.Scalar(lower=1, upper=15).set_integer_casting(),
+        # weight_decay=nevergrad.p.Choice([0.0, 1e-4]),
+        root_dirichlet_alpha = nevergrad.p.Scalar(lower=0.0, upper=1.0),
+        root_exploration_fraction = nevergrad.p.Scalar(lower=0.0, upper=1.0),
+        # support_size = nevergrad.p.Choice([2, 5, 10, 50, 100]),
+    )
+
+    print("Searching hyperparameters")
+    best_hyperparameters = hyperparameter_search(
+        game_name, parametrization, budget, parallel_experiments, num_tests
+    )
+    muzero = MuZero(game_name, best_hyperparameters)
+    print("\nDone")
 
     ray.shutdown()

@@ -219,7 +219,7 @@ class MuZero:
         if log_in_tensorboard:
             print('Initializing tensorboard logging')
             if self.remote_logging:
-                self.logging_loop.remote(
+                self.remote_logging_loop.remote(
                     self, num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
                 )
             else:
