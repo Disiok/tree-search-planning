@@ -251,11 +251,10 @@ class MockMuZeroStochastic(MuZeroFullyConnectedNetwork):
         return [1.0], [next_encoded_state], [reward]
 
     def recurrent_inference(self, encoded_state, action):
-        raise NotImplementedError(
-            'This function should not be implemented, \
-            the tree search should call dynamics and prediction separately \
-            for clarity in the bi-level tree search process.')
-
+        _, next_encoded_states, rewards = self.dynamics(encoded_state, action)
+        next_encoded_state, reward = next_encoded_states[0], rewards[0]
+        policy_logits, value = self.prediction(next_encoded_state)
+        return value, reward, policy_logits, next_encoded_state
 
 ###### End Stochastic #######
 ##################################
