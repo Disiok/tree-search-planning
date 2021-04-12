@@ -326,7 +326,8 @@ class MCTS:
         min_max_stats = MinMaxStats()
 
         max_tree_depth = 0
-        for _ in range(self.config.num_simulations):
+        num_sims = 0
+        while num_sims < self.config.num_simulations:
             virtual_to_play = to_play
             node = root
             search_path = [node]
@@ -365,6 +366,8 @@ class MCTS:
                 )
 
                 self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+                num_sims += 1
+
             elif isinstance(node, TransitionNode):
                 # in other words, the parent is a StateNode
                 probs, child_hidden_states, child_rewards = model.dynamics(
@@ -378,6 +381,7 @@ class MCTS:
                     child_hidden_states, 
                     child_rewards,
                 )
+
                 # TODO: what is the value supposed to be for a transition node? 
                 #       It doesn't have a value
 
