@@ -9,6 +9,7 @@
 	"actor_spawn_sep": 20,
 	"goal_reward": 1,
 	"goal_radius": 2,
+	"veh_type": "SelfishReckless",
     "observation": {
         "type": "TTCGWithVelocity",
         "fixed_velocity_grid": true

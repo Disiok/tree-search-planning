@@ -299,8 +299,8 @@ class IDMVehicle(ControlledVehicle):
 
 class SelfishRecklessIDMVehicle(IDMVehicle):
     # this vehicle should lane change very recklessly
-    LANE_CHANGE_MIN_ACC_GAIN = 0.01
-    LANE_CHANGE_MAX_BRAKING_IMPOSED = 5.0
+    LANE_CHANGE_MIN_ACC_GAIN = 0.
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 100.0
 
 class SelfishSafeIDMVehicle(IDMVehicle):
     # this vehicle wants to go fast, but will consider making others hard brake
@@ -312,13 +312,13 @@ class PoliteIDMVehicle(IDMVehicle):
     POLITENESS = 1.0
 
 class PoliteSafeIDMVehicle(IDMVehicle):
-    # polite wrt to acceleration changes and considers others braking
+    # polite wrt to acceleration changes and very safe
     POLITENESS = 1.0
-    LANE_CHANGE_MAX_BRAKING_IMPOSED = 1.0
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 0.5
 
 class SameLaneIDMVehicle(IDMVehicle):
     # this vehicle should never change
-    LANE_CHANGE_MAX_BREAKING_IMPOSED = -999.0
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = -999.0
 
 class LinearVehicle(IDMVehicle):
 
@@ -527,3 +527,10 @@ class DefensiveVehicle(LinearVehicle):
     ACCELERATION_PARAMETERS = [MERGE_ACC_GAIN / ((1 - MERGE_VEL_RATIO) * MERGE_TARGET_VEL),
                                MERGE_ACC_GAIN / (MERGE_VEL_RATIO * MERGE_TARGET_VEL),
                                2.0]
+
+
+IDM_DICT = {
+        'Polite': PoliteIDMVehicle,
+        'SameLane': SameLaneIDMVehicle,
+        'SelfishReckless': SelfishRecklessIDMVehicle,
+        }

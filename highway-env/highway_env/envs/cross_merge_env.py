@@ -6,7 +6,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.lane import LineType, StraightLane, SineLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.vehicle.behavior import *
+from highway_env.vehicle.behavior import IDM_DICT
 from highway_env.vehicle.objects import Obstacle, Landmark
 
 
@@ -37,6 +37,7 @@ class CrossMergeEnv(AbstractEnv):
             'actor_speed_mean': 20,
             'actor_speed_std': 2,
             'actor_spawn_sep': 15,
+            'veh_type': 'Polite',
             'goal_reward': 1,
             'goal_radius': 3,
         }
@@ -46,9 +47,9 @@ class CrossMergeEnv(AbstractEnv):
 
     def step(self, *args, **kwargs):
         self.prev_ego_pos = np.array(self.vehicle.position)
-        n_crashed = self._other_crashed()
-        if n_crashed > 0:
-            print(f"{n_crashed} othere vehicles crashed")
+        #n_crashed = self._other_crashed()
+        #if n_crashed > 0:
+        #    print(f"{n_crashed} othere vehicles crashed")
         
         return super().step(*args, **kwargs)
 
@@ -237,8 +238,10 @@ class CrossMergeEnv(AbstractEnv):
         np.random.shuffle(spawns)
         spawns = spawns[:nv]
 
+        veh_type = IDM_DICT.get(self.config['veh_type'])
+
         for spawn in spawns:
-            veh = SelfishRecklessIDMVehicle(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
+            veh = veh_type(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
             road.vehicles.append(veh)
         
         self.vehicle = ego_vehicle
