@@ -360,6 +360,7 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
         transition_logits_prior = self.transition_prior_network(encoded_state)  # [N, 3]
         transition_logits_post = self.transition_posterior_network(torch.cat((encoded_state, future_encoded_state), dim=-1))  # [N, 3]
 
+        # TODO: implement straight through (or find an existing implementation)
         transition_sample_post = sample_straight_through(transition_logits_post)
         # NOTE: reshape to match next_encoding_states
         transition_sample_post_expand = transition_sample_post.view(N, 1, 3).expand(-1, encoding_size, -1)
