@@ -403,7 +403,7 @@ class MuZero:
         self.shared_storage_worker = None
 
     def test(
-        self, render=True, opponent=None, muzero_player=None, num_tests=1, num_gpus=0, save_gif=False
+        self, render=True, opponent=None, muzero_player=None, num_tests=1, num_gpus=0, save_gif=False, output_path=None
     ):
         """
         Test the model in a dedicated thread.
@@ -427,7 +427,7 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")

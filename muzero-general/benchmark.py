@@ -3,6 +3,7 @@ import argparse
 import importlib
 import math
 import os
+import pathlib
 import pickle
 import sys
 import time
@@ -24,25 +25,26 @@ import trainer
 from muzero import MuZero
 
 
-def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus):
+def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path):
     # Initialize MuZero
     muzero = MuZero(env)
     if checkpoint_path is not None:
         muzero.load_model(checkpoint_path=checkpoint_path)
 
-    result = muzero.test(render=False, opponent='self', muzero_player=None, num_tests=n_episodes, save_gif=False, num_gpus=num_gpus)
+    result = muzero.test(render=False, opponent='self', muzero_player=None, num_tests=n_episodes, save_gif=False, num_gpus=num_gpus, output_path=output_path)
     ray.shutdown()
 
     return result
 
 
-def evaluate(model, env, checkpoint_path, n_episodes, num_gpus):
+def evaluate(model, env, checkpoint_path, n_episodes, num_gpus, output_path):
     if model == 'muzero':
-        result = evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus)
+        result = evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path)
     elif model == 'alphazero':
+        # NOTE(kwong): no need to do so; works with muzero.
         raise NotImplementedError('TODO: Hook up alphazero from Kelvin')
     else: 
-        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py`)
+        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py')
 
     return result
 
@@ -54,7 +56,9 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_path', type=str, default='/h/suo/dev/tree-search-planning/muzero-general/results/highway_env/2021-03-14--22-39-32/model.checkpoint')
     parser.add_argument('--n_episodes', type=int, default=5)
     parser.add_argument('--num_gpus', type=int, default=1)
+    parser.add_argument('--output_path', type=str, default='/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/evaluation/')
     args = parser.parse_args()
 
-    result = evaluate(args.model, args.env, args.checkpoint_path, args.n_episodes, args.num_gpus)
+    output_path = pathlib.Path(args.output_path) / args.env
+    result = evaluate(args.model, args.env, args.checkpoint_path, args.n_episodes, args.num_gpus, output_path)
     print(result)
