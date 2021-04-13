@@ -436,10 +436,10 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")
+            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
             results.append(
                 self_play_worker.play_game(
                     0,
@@ -452,7 +452,7 @@ class MuZero:
                     uniform_policy=uniform_policy
                 )
             )
-        self_play_worker.close_game()
+            self_play_worker.close_game()
 
         if len(self.config.players) == 1:
             mean_total_reward = numpy.mean([sum(history.reward_history) for history in results])
