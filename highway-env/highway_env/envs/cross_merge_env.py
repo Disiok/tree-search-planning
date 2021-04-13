@@ -73,13 +73,16 @@ class CrossMergeEnv(AbstractEnv):
         ego_position = self.vehicle.position
 
         for idx, goal in enumerate(self.goals):
+            if goal in self.reached_goals:
+                continue
             goal_position = goal.position
             #dist = np.linalg.norm(ego_position - goal_position)
             dist = point2line_dist(goal_position, self.prev_ego_pos, ego_position)    
         
             if dist < self.config['goal_radius']:
                 reward += self.config['goal_reward']
-                self.goals.pop(idx)
+                self.reached_goals.append(goal)
+                #self.goals.pop(idx)
                 break
         
         return action_reward[action] + reward
@@ -95,7 +98,8 @@ class CrossMergeEnv(AbstractEnv):
         self._make_road()
         self._make_vehicles()
         self.prev_ego_pos = None
- 
+        self.reached_goals = []
+
     def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0, width=None):
         """
         Make parallel straight roads
