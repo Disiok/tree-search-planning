@@ -9,7 +9,7 @@ import ray
 import torch
 
 import models
-from self_play import MCTS, Node, GameHistory, MinMaxStats
+from self_play import MCTS, Node, GameHistory, MinMaxStats, AZMCTS
 
 
 class SelfPlay:
@@ -77,13 +77,24 @@ class SelfPlay:
 
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
-                    root, mcts_info = MCTS(self.config).run(
-                        self.model,
-                        stacked_observations,
-                        self.game.legal_actions(),
-                        self.game.to_play(),
-                        True,
-                    )
+                    if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                        root, mcts_info = AZMCTS(self.config).run(
+                            self.model,
+                            self.game,
+                            game_history,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+                    else:
+                        root, mcts_info = MCTS(self.config).run(
+                            self.model,
+                            stacked_observations,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+
                     action = self.select_action(
                         root,
                         temperature
@@ -99,7 +110,7 @@ class SelfPlay:
                         )
                 else:
                     action, root = self.select_opponent_action(
-                        opponent, stacked_observations
+                        opponent, stacked_observations, game_history
                     )
 
                 observation, reward, done = self.game.step(action)
@@ -127,18 +138,28 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations):
+    def select_opponent_action(self, opponent, stacked_observations, game_history):
         """
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
-            root, mcts_info = MCTS(self.config).run(
-                self.model,
-                stacked_observations,
-                self.game.legal_actions(),
-                self.game.to_play(),
-                True,
-            )
+            if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                root, mcts_infor = AZMCTS(self.config).run(
+                    self.model,
+                    self.game,
+                    game_history,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
+            else:
+                root, mcts_info = MCTS(self.config).run(
+                    self.model,
+                    stacked_observations,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
             print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
             print(
