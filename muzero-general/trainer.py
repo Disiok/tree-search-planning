@@ -290,6 +290,12 @@ class Trainer:
         target_policy,
     ):
         # Cross-entropy seems to have a better convergence than MSE
+        #print(value.shape)
+        #print(reward.shape)
+        #print(policy_logits.shape)
+        #print(target_reward.shape)
+        #print(target_policy.shape)
+        # print(target_value.min(), target_value.max())
         value_loss = (-target_value * torch.nn.LogSoftmax(dim=1)(value)).sum(1)
         reward_loss = (-target_reward * torch.nn.LogSoftmax(dim=1)(reward)).sum(1)
         policy_loss = (-target_policy * torch.nn.LogSoftmax(dim=1)(policy_logits)).sum(

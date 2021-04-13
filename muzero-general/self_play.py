@@ -171,7 +171,7 @@ class SelfPlay:
                     )
 
                 observation, reward, done = self.game.step(action)
-
+        
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
                     self.game.render()
