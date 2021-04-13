@@ -275,7 +275,8 @@ class Evaluation(object):
 
     def save_agent_model(self, identifier, do_save=True):
         # Create the folder if it doesn't exist
-        permanent_folder = self.directory / self.SAVED_MODELS_FOLDER
+        # permanent_folder = self.directory / self.SAVED_MODELS_FOLDER
+        permanent_folder = self.run_directory
         os.makedirs(permanent_folder, exist_ok=True)
 
         episode_path = None
@@ -292,7 +293,8 @@ class Evaluation(object):
 
     def load_agent_model(self, model_path):
         if model_path is True:
-            model_path = self.directory / self.SAVED_MODELS_FOLDER / "latest.tar"
+            #model_path = self.directory / self.SAVED_MODELS_FOLDER / "latest.tar"
+            model_path = self.run_directory / "latest.tar"
         if isinstance(model_path, str):
             model_path = Path(model_path)
             if not model_path.exists():
@@ -303,6 +305,7 @@ class Evaluation(object):
                 logger.info("Loaded {} model from {}".format(self.agent.__class__.__name__, model_path))
         except FileNotFoundError:
             logger.warning("No pre-trained model found at the desired location.")
+            return 
         except NotImplementedError:
             pass
 
