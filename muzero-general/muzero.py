@@ -21,6 +21,8 @@ import self_play_local
 import shared_storage
 import trainer
 
+import wandb
+
 
 class MuZero:
     """
@@ -99,6 +101,13 @@ class MuZero:
             object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
             dashboard_host="0.0.0.0"
             )
+
+        print('Initializing wandb')
+        wandb.init(
+            project='tsmp',
+            entity='plff',
+            experiment_name = '_'.join(self.config.results_path.split('/')[-2:])
+        )
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -290,6 +299,8 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
+                log_to_wandb(info)
+                
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
@@ -337,7 +348,7 @@ class MuZero:
                         f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Value loss: {info["value_loss"]:.2f}. Reward loss: {info["reward_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}.')
                 counter += 1
 
-                if counter % 1000 == 0 and self.config.save_model:
+                if counter % 100 == 0 and self.config.save_model:
                     # Persist replay buffer to disk
                     print("\n\nPersisting replay buffer games to disk...")
                     pickle.dump(
@@ -368,6 +379,7 @@ class MuZero:
                 },
                 open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
             )
+            print(os.path.join(self.config.results_path, "replay_buffer.pkl"))
 
     def terminate_workers(self):
         """
@@ -518,3 +530,12 @@ class CPUActor:
         weigths = model.get_weights()
         summary = str(model).replace("\n", " \n\n")
         return weigths, summary
+
+
+def log_to_wandb(measurements, prefix=""):
+    logs = {}
+    for k, v in measurements.items():
+	key = f"{prefix}_{k}" if prefix else k
+	if v:
+	    logs[key] = v[-1]
+    wandb.log(logs)

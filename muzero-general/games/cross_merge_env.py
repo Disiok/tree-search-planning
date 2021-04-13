@@ -53,13 +53,12 @@ class MuZeroConfig:
 
         # UCB formula
         self.pb_c_base = 19652
-        self.pb_c_init = 12.
-
+        self.pb_c_init = 1.
 
 
         ### Network
         self.network = "fullyconnected"  # "resnet" / "fullyconnected"
-        self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
+        self.support_size = 3  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
 
         # Residual Network
         self.downsample = False  # Downsample observations before representation network, False / "CNN" (lighter) / "resnet" (See paper appendix Network Architecture)
@@ -73,9 +72,9 @@ class MuZeroConfig:
         self.resnet_fc_policy_layers = [32]  # Define the hidden layers in the policy head of the prediction network
 
         # Fully Connected Network
-        self.encoding_size = 128
-        self.fc_representation_layers = [128, 128, 64]
-        self.fc_dynamics_layers = [64]  # Define the hidden layers in the dynamics network
+        self.encoding_size = 256
+        self.fc_representation_layers = [256, 128, 128]
+        self.fc_dynamics_layers = [128]  # Define the hidden layers in the dynamics network
         self.fc_reward_layers = [32]  # Define the hidden layers in the reward network
         self.fc_value_layers = [32]  # Define the hidden layers in the value network
         self.fc_policy_layers = [32]  # Define the hidden layers in the policy network
@@ -87,14 +86,14 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            '2lane0ac' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            '2lane0ac_day2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 5000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 512 # Number of parts of games to train on at each training step
         self.checkpoint_interval = 300  # 10  # Number of training steps before using the model for self-playing
-        self.value_loss_weight = 0.25  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
-        self.reward_loss_weight = 0.25  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.value_loss_weight = 1.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
+        self.reward_loss_weight = 1.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
@@ -110,7 +109,7 @@ class MuZeroConfig:
 
         ### Replay Buffer
         self.replay_buffer_size = int(1e3)  # Number of self-play games to keep in the replay buffer
-        self.num_unroll_steps = 12  # Number of game moves to keep for every batch element
+        self.num_unroll_steps = 5  # Number of game moves to keep for every batch element
         self.td_steps = 16  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
         self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
@@ -135,7 +134,9 @@ class MuZeroConfig:
         Returns:
             Positive float.
         """
-        return 0.25 + (1 - trained_steps / self.training_steps) * 0.75
+        end = 0.25
+        beg = 10
+        return end + (1 - trained_steps / self.training_steps) * beg
 
         if trained_steps < 0.5 * self.training_steps:
             return 1.0
