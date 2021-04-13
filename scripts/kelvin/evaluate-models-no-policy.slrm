@@ -45,4 +45,4 @@ C=("/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_en
 )
 
 cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
-python benchmark.py --env "${A[$SLURM_ARRAY_TASK_ID]}" --checkpoint_path "${C[$SLURM_ARRAY_TASK_ID]}" --n_episodes "50" --output_path "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/evaluations"
+python benchmark.py --env "${A[$SLURM_ARRAY_TASK_ID]}" --checkpoint_path "${C[$SLURM_ARRAY_TASK_ID]}" --n_episodes "50" --output_path "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/evaluations" --uniform-policy

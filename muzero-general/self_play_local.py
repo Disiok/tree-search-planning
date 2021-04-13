@@ -40,7 +40,15 @@ class SelfPlay:
         self.model.eval()
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False
+        self,
+        temperature,
+        temperature_threshold,
+        render,
+        opponent,
+        muzero_player,
+        save_gif=False,
+        policy_only=False,
+        uniform_policy=False
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -85,6 +93,8 @@ class SelfPlay:
                             self.game.legal_actions(),
                             self.game.to_play(),
                             True,
+                            policy_only=policy_only,
+                            uniform_policy=uniform_policy,
                         )
                     else:
                         root, mcts_info = MCTS(self.config).run(
@@ -93,6 +103,8 @@ class SelfPlay:
                             self.game.legal_actions(),
                             self.game.to_play(),
                             True,
+                            policy_only=policy_only,
+                            uniform_policy=uniform_policy,
                         )
 
                     action = self.select_action(
@@ -101,6 +113,7 @@ class SelfPlay:
                         if not temperature_threshold
                         or len(game_history.action_history) < temperature_threshold
                         else 0,
+                        policy_only
                     )
 
                     if render:
@@ -110,7 +123,7 @@ class SelfPlay:
                         )
                 else:
                     action, root = self.select_opponent_action(
-                        opponent, stacked_observations, game_history
+                        opponent, stacked_observations, game_history, policy_only
                     )
 
                 observation, reward, done = self.game.step(action)
@@ -138,19 +151,21 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations, game_history):
+    def select_opponent_action(self, opponent, stacked_observations, game_history, policy_only, uniform_policy):
         """
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
             if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
-                root, mcts_infor = AZMCTS(self.config).run(
+                root, mcts_info = AZMCTS(self.config).run(
                     self.model,
                     self.game,
                     game_history,
                     self.game.legal_actions(),
                     self.game.to_play(),
                     True,
+                    policy_only=policy_only,
+                    uniform_policy=uniform_policy,
                 )
             else:
                 root, mcts_info = MCTS(self.config).run(
@@ -159,6 +174,8 @@ class SelfPlay:
                     self.game.legal_actions(),
                     self.game.to_play(),
                     True,
+                    policy_only=policy_only,
+                    uniform_policy=uniform_policy,
                 )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
             print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
@@ -183,12 +200,17 @@ class SelfPlay:
             )
 
     @staticmethod
-    def select_action(node, temperature):
+    def select_action(node, temperature, policy_only):
         """
         Select action according to the visit count distribution and the temperature.
         The temperature is changed dynamically with the visit_softmax_temperature function
         in the config.
         """
+        if policy_only:
+            actions = [action for action in node.children.keys()]
+            prior = numpy.array([c.prior for c in node.children.values()])
+            return actions[numpy.argmax(prior)]
+
         visit_counts = numpy.array(
             [child.visit_count for child in node.children.values()], dtype="int32"
         )

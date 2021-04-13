@@ -316,6 +316,8 @@ class MCTS:
         to_play,
         add_exploration_noise,
         override_root_with=None,
+        policy_only=False,
+        uniform_policy=False,
     ):
         """
         At the root of the search tree we use the representation function to obtain a
@@ -352,6 +354,10 @@ class MCTS:
             assert set(legal_actions).issubset(
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
+
+            if uniform_policy:
+                policy_logits.zero_()
+
             root.expand(
                 legal_actions,
                 to_play,
@@ -369,7 +375,8 @@ class MCTS:
         min_max_stats = MinMaxStats()
 
         max_tree_depth = 0
-        for _ in range(self.config.num_simulations):
+        num_simulations = 0 if policy_only else self.config.num_simulations 
+        for _ in range(num_simulations):
             virtual_to_play = to_play
             node = root
             search_path = [node]
@@ -396,6 +403,9 @@ class MCTS:
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
             is_terminal = terminal.item() >= 0.  # hard threshold to determine terminal state
+
+            if uniform_policy:
+                policy_logits.zero_()
 
             # only expand node if we're not at a terminal state
             # or if we don't actually use the is_terminal prediction
@@ -560,7 +570,7 @@ class GameHistory:
             sum_visits = sum(child.visit_count for child in root.children.values())
             self.child_visits.append(
                 [
-                    root.children[a].visit_count / sum_visits
+                    root.children[a].visit_count / max(sum_visits, 1)
                     if a in root.children
                     else 0
                     for a in action_space
@@ -696,6 +706,8 @@ class AZMCTS(MCTS):
         to_play,
         add_exploration_noise,
         override_root_with=None,
+        policy_only=False,
+        uniform_policy=False,
     ):
         r"""Run MCTS for a number of simulations."""
         n_env_interactions = 0
@@ -731,6 +743,9 @@ class AZMCTS(MCTS):
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
 
+            if uniform_policy:
+                policy_logits.zero_()
+
             hidden_state = (
                 game.env.simplify(),  # NOTE(kwong): This works for highway-env only.
                 game_history.observation_history[-1],
@@ -754,7 +769,8 @@ class AZMCTS(MCTS):
         min_max_stats = MinMaxStats()
 
         max_tree_depth = 0
-        for _ in range(self.config.num_simulations):
+        num_simulations = 0 if policy_only else self.config.num_simulations
+        for _ in range(num_simulations):
             node = root
 
             terminal = False
@@ -799,6 +815,10 @@ class AZMCTS(MCTS):
                 )
                 value, _, _, policy_logits, _, _ = model.initial_inference(observation)
                 value = models.support_to_scalar(value, self.config.support_size).item()
+
+                if uniform_policy:
+                    policy_logits.zero_()
+
                 node.expand(
                     self.config.action_space,
                     virtual_to_play,
