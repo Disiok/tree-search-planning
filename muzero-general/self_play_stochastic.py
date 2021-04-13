@@ -406,13 +406,13 @@ class MCTS:
         for node in reversed(search_path):
             node.value_sum += value
             node.visit_count += 1
-            min_max_stats.update(node.reward + self.config.discount * node.value())
 
             if isinstance(node, TransitionNode):
                 # no discounting through a transition node
                 value = value
             elif isinstance(node, StateNode):
                 value = node.reward + self.config.discount * value
+                min_max_stats.update(node.reward + self.config.discount * node.value())
 
 
 class Node:
