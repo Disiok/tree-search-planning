@@ -2,6 +2,7 @@ import math
 from abc import ABC, abstractmethod
 
 import torch
+from torch import nn
 
 
 class MuZeroNetwork:
@@ -218,23 +219,156 @@ class MuZeroFullyConnectedNetwork(AbstractNetwork):
 
 
 class MuZeroStochastic(MuZeroFullyConnectedNetwork):
+    def __init__(
+        self,
+        observation_shape,
+        stacked_observations,
+        action_space_size,
+        encoding_size,
+        fc_reward_layers,
+        fc_value_layers,
+        fc_policy_layers,
+        fc_representation_layers,
+        fc_dynamics_layers,
+        support_size,
+        # stochastic
+        n_futures,
+        fc_prior_layers,
+        fc_posterior_layers
+    ):
+        super().__init__(
+            observation_shape,
+            stacked_observations,
+            action_space_size,
+            encoding_size,
+            fc_reward_layers,
+            fc_value_layers,
+            fc_policy_layers,
+            fc_representation_layers,
+            fc_dynamics_layers,
+            support_size,
+        )
+        # TODO: might be clearer to name these transitions instead of futures
+        self.n_futures = n_futures
+
+        # Override
+        # we use separate headers to predict different futures
+        # h'_1, h'_2, .... h'_k = f(h, a)
+        self.dynamics_encoded_state_network = torch.nn.DataParallel(
+            nn.ModuleDict({
+                future_ind: mlp(
+                    encoding_size + self.action_space_size,
+                    fc_dynamics_layers,
+                    encoding_size,
+                )
+                for future_ind in range(n_futures)
+            })
+        )
+
+        # Prior distribution over discrete future choices: P(z_{prior} | h)
+        self.transition_prior_network = torch.nn.DataParallel(
+            mlp(encoding_size, fc_prior_layers, self.n_futures)
+        )
+
+        # Posterior distribution over discrete future choices: P(z_{post} | h, h')
+        self.transition_posterior_network = torch.nn.DataParallel(
+            mlp(encoding_size + encoding_size, fc_posterior_layers, self.n_futures)
+        )
+        
+
     def dynamics(self, encoded_state, action):
         """
-        We augment this function to return a categorical distribution over next states
+        NOTE: this should only be called during inference, 
+              it returns the prior transition distribution
+
+        NOTE: We augment this function to return a categorical distribution over next states
 
         Returns:
             probs (list): probability of next state
             next_encoded_state  (list): next states
             reward (list): reward associated with each next state
         """
-        raise NotImplementedError
+        next_encoded_states, rewards = self._dynamics_all_futures(encoded_state, action)
+        # TODO: This currently violates the interface, we have the future dim at -1\
+        #       Need to transpose(-1, 0, 1, ...) or change the interface
 
-    def recurrent_inference(self, encoded_state, action):
-        raise NotImplementedError(
-            'This function should not be implemented, \
-            the tree search should call dynamics and prediction separately \
-            for clarity in the bi-level tree search process.')
-        
+        transition_logits = self.transition_prior_network(encoded_state)
+        # TODO: check if this is the right dimension to take softmax over
+        transition_probs = torch.softmax(logits, dim=-1)  
+
+        return transition_probs, next_encoded_states, rewards
+
+    def _dynamics_all_futures(self, encoded_state, action):
+        # TODO: could probably be more efficient by parallelizing
+        next_encoded_state_list, reward_list = [], []
+        for future_ind in range(self.n_futures):
+            next_encoded_state, reward = self._dynamics(encoded_state, action, future_ind)
+            next_encoded_state_list.append(next_encoded_state)
+            reward_list.append(reward)
+
+        next_encoded_states = torch.stack(next_encoded_state_list, dim=-1)
+        rewards = torch.stack(reward_list)
+
+        return next_encoded_states, rewards
+
+    def _dynamics(self, encoded_state, action, future_ind):
+        """
+        This is identical to original implementation. 
+        Only change is indexing into module dict to select the specified dynamic network
+        """
+        # Stack encoded_state with a game specific one hot encoded action (See paper appendix Network Architecture)
+        action_one_hot = (
+            torch.zeros((action.shape[0], self.action_space_size))
+            .to(action.device)
+            .float()
+        )
+        action_one_hot.scatter_(1, action.long(), 1.0)
+        x = torch.cat((encoded_state, action_one_hot), dim=1)
+
+        next_encoded_state = self.dynamics_encoded_state_network[future_ind](x)
+
+        reward = self.dynamics_reward_network(next_encoded_state)
+
+        # Scale encoded state between [0, 1] (See paper appendix Training)
+        min_next_encoded_state = next_encoded_state.min(1, keepdim=True)[0]
+        max_next_encoded_state = next_encoded_state.max(1, keepdim=True)[0]
+        scale_next_encoded_state = max_next_encoded_state - min_next_encoded_state
+        scale_next_encoded_state[scale_next_encoded_state < 1e-5] += 1e-5
+        next_encoded_state_normalized = (
+            next_encoded_state - min_next_encoded_state
+        ) / scale_next_encoded_state
+
+        return next_encoded_state_normalized, reward
+
+    def recurrent_inference(self, encoded_state, action, future_encoded_state):
+        """
+        NOTE: This is only called during training, so we use the posterior transition distribution
+        NOTE: In inference, we should call prediction and dynamics separately, as we have modified in stochastic MCTS
+        NOTE: We also need to change the interface, to return the prior and posterior transition distribution
+              such that we can take KL divergence loss on them
+        NOTE: we need to future encoded state to get posterior distribution ove transitions
+
+        NOTE: interface is changed to include two more in return:
+            - transition_logits_post
+            - transition_logits_prior
+
+        This is for taking the KL divergence loss
+        """
+        N, encoding_size = encoding_size.shape
+        next_encoded_states, rewards = self._dynamics_all(encoded_state, action)  # assuming shapes are [N, encoding_size, 3], [N, 3]
+
+        transition_logits_prior = self.transition_prior_network(encoded_state)  # [N, 3]
+        transition_logits_post = self.transition_posterior_network(torch.cat((encoded_state, future_encoded_state), dim=-1))  # [N, 3]
+
+        transition_sample_post = sample_straight_through(transition_logits_post)
+        # NOTE: reshape to match next_encoding_states
+        transition_sample_post_expand = transition_sample_post.view(N, 1, 3).expand(-1, encoding_size, -1)
+
+        next_encoded_state = (next_encoded_states * transition_sample_post_expand).sum(-1)  # [N, encoding_size]
+        reward = (rewards * transition_sample_post).sum(-1)  # [N]
+
+        policy_logits, value = self.prediction(next_encoded_state)
+        return value, reward, policy_logits, next_encoded_state, transition_logits_post, transition_logits_prior
 
 class MockMuZeroStochastic(MuZeroFullyConnectedNetwork):
     def dynamics(self, encoded_state, action):

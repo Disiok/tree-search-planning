@@ -143,6 +143,10 @@ class Trainer:
         device = next(self.model.parameters()).device
         if self.config.PER:
             weight_batch = torch.tensor(weight_batch.copy()).float().to(device)
+        # TODO: does this include observations across all timesteps
+        # NOTE: no, it doesn't. We need to modify the replay buffer sampling logic 
+        #       to return with observations for all steps, instead of just
+        #       the initial step with some past history
         observation_batch = torch.tensor(observation_batch).float().to(device)
         action_batch = torch.tensor(action_batch).long().to(device).unsqueeze(-1)
         target_value = torch.tensor(target_value).float().to(device)
@@ -167,8 +171,13 @@ class Trainer:
         value, reward, policy_logits, hidden_state = self.model.initial_inference(
             observation_batch
         )
+
+        # TODO: we need to iterate over all timesteps, and run model.representation
+        #       to obtain all the hidden states across time
         predictions = [(value, reward, policy_logits)]
         for i in range(1, action_batch.shape[1]):
+            # TODO: we need to pass in the next_hidden_state as well here (computed in a loop in the previous TODO)
+            #       this is because we need it to do inference for the posterior transition logits
             value, reward, policy_logits, hidden_state = self.model.recurrent_inference(
                 hidden_state, action_batch[:, i]
             )
@@ -191,6 +200,7 @@ class Trainer:
         )
         value_loss += current_value_loss
         policy_loss += current_policy_loss
+        # TODO: compute KL divergence loss between the posterior transition logits and prior transition logits
         # Compute priorities for the prioritized replay (See paper appendix Training)
         pred_value_scalar = (
             models.support_to_scalar(value, self.config.support_size)
