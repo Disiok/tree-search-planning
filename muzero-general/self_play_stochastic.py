@@ -328,7 +328,7 @@ class MCTS:
         max_tree_depth = 0
         num_sims = 0
         while num_sims < self.config.num_simulations:
-            assert num_sims == sum([child.visit_count for child in root.children])
+            assert num_sims == sum([child.visit_count for _, child in root.children.items()])
             virtual_to_play = to_play
             node = root
             search_path = [node]

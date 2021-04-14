@@ -63,7 +63,7 @@ class MuZero:
             else:
                 self.config = config
 
-        wandb.init(project='tree-search-planning', entity='disiok', tags=[game_name])
+        wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
         wandb.config.update(self.config)
 
         # Fix random generator seed

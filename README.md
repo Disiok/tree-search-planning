@@ -11,3 +11,6 @@ In `rl-agents`:
 `python3 setup.py develop`  
 In `muzero-general`: 
 `pip install -r requirements.txt`
+
+For logging to Weights and Biases
+`wandb login`
