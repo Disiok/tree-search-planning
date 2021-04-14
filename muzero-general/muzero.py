@@ -23,7 +23,7 @@ import self_play_stochastic
 import self_play_local_stochastic
 import shared_storage
 import trainer
-import wandb
+# import wandb
 
 import wandb
 
@@ -70,8 +70,8 @@ class MuZero:
             else:
                 self.config = config
 
-        wandb.init(project='tree-search-planning', entity='disiok', tags=[game_name])
-        wandb.config.update(self.config)
+        # wandb.init(project='tree-search-planning', entity='disiok', tags=[game_name])
+        # wandb.config.update(self.config)
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -348,11 +348,7 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-                wandb.log(info)
-
-                writer.add_scalar(
-                    "0.visit_dist_entropy", info["visit_dist_entropy"], counter
-                )
+                # wandb.log(info)
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
