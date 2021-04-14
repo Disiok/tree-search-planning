@@ -370,14 +370,14 @@ class MCTS:
 
             elif isinstance(node, TransitionNode):
                 # in other words, the parent is a StateNode
-                probs, child_hidden_states, child_rewards = model.dynamics(
+                transition_logits, child_hidden_states, child_rewards = model.dynamics(
                     parent.hidden_state, 
                     torch.tensor([[action]]).to(parent.hidden_state.device),
                 )
 
                 node.expand(
                     virtual_to_play,
-                    probs,
+                    transition_logits,
                     child_hidden_states, 
                     child_rewards,
                 )
@@ -533,7 +533,7 @@ class TransitionNode(Node):
         ])
         return action, self.children[action]
 
-    def expand(self, to_play, transition_probs, child_hidden_states, child_rewards):
+    def expand(self, to_play, transition_logits, child_hidden_states, child_rewards):
         """
         We expand a node using the value, reward and policy prediction obtained from the
         neural network.
@@ -548,11 +548,14 @@ class TransitionNode(Node):
         # construct the child (i.e. state) nodes with their hidden states and rewards
         # but we currently defer that to the child node expand operation for consistency 
         # with previous behavior
-        self.child_hidden_states = child_hidden_states
-        self.child_rewards = child_rewards
+        self.child_hidden_states = child_hidden_states  # list of torch.Tensor [n_futures, 1, encoding_dim]
+        self.child_rewards = child_rewards  # list of torch.Tensor [n_futures, 1, support_dim]
 
-        for action, p in enumerate(transition_probs):
-            self.children[action] = StateNode(p)
+        transition_logits = transition_logits[:, 0]  # [n_futures]
+        transition_probs = transition_logits.softmax(dim=0)  # [n_futures]
+
+        for transition_ind, p in enumerate(transition_probs):
+            self.children[transition_ind] = StateNode(p)
 
 class GameHistory:
     """

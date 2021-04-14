@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 import torch
 from torch import nn
+from torch.distributions import OneHotCategoricalStraightThrough
 
 
 class MuZeroNetwork:
@@ -49,6 +50,9 @@ class MuZeroNetwork:
                 config.fc_representation_layers,
                 config.fc_dynamics_layers,
                 config.support_size,
+                config.n_futures,
+                config.fc_prior_layers,
+                config.fc_posterior_layers,
             )
         elif config.network == "resnet":
             return MuZeroResidualNetwork(
@@ -270,16 +274,16 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
         # Override
         # we use separate headers to predict different futures
         # h'_1, h'_2, .... h'_k = f(h, a)
-        self.dynamics_encoded_state_network = torch.nn.DataParallel(
-            nn.ModuleDict({
-                future_ind: mlp(
-                    encoding_size + self.action_space_size,
-                    fc_dynamics_layers,
-                    encoding_size,
+        self.dynamics_encoded_state_network = nn.ModuleList([
+                torch.nn.DataParallel(
+                    mlp(
+                        encoding_size + self.action_space_size,
+                        fc_dynamics_layers,
+                        encoding_size,
+                    )
                 )
-                for future_ind in range(n_futures)
-            })
-        )
+                for _ in range(n_futures)
+            ])
 
         # Prior distribution over discrete future choices: P(z_{prior} | h)
         self.transition_prior_network = torch.nn.DataParallel(
@@ -299,19 +303,29 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
         NOTE: We augment this function to return a categorical distribution over next states
 
         Returns:
-            probs (list): probability of next state
+            transition_logits (list): transition logits
             next_encoded_state  (list): next states
             reward (list): reward associated with each next state
         """
-        next_encoded_states, rewards = self._dynamics_all_futures(encoded_state, action)
+        # both [N, hidden_state_dim, n_futures]
+        next_encoded_states, rewards = self._dynamics_all_futures(encoded_state, action)  
+
+        transition_logits = self.transition_prior_network(encoded_state)  # [N, n_futures]
+
+        # dynamics should only be called in inference, with batch size 1
+        assert next_encoded_states.dim() == 3
+        assert next_encoded_states.shape[0] == 1
+        assert rewards.shape[0] == 1
+        assert transition_logits.shape[0] == 1
+
         # TODO: This currently violates the interface, we have the future dim at -1\
         #       Need to transpose(-1, 0, 1, ...) or change the interface
+        # NOTE: fixed
+        next_encoded_states = next_encoded_states.permute(2, 0, 1)  # [n_futures, N, hidden_state_dim]
+        rewards = rewards.permute(2, 0, 1)  # [n_futures, N, support_dim]
+        transition_logits = transition_logits.permute(1, 0)  # [n_futures, N]
 
-        transition_logits = self.transition_prior_network(encoded_state)
-        # TODO: check if this is the right dimension to take softmax over
-        transition_probs = torch.softmax(logits, dim=-1)  
-
-        return transition_probs, next_encoded_states, rewards
+        return transition_logits, next_encoded_states, rewards
 
     def _dynamics_all_futures(self, encoded_state, action):
         # TODO: could probably be more efficient by parallelizing
@@ -322,7 +336,7 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
             reward_list.append(reward)
 
         next_encoded_states = torch.stack(next_encoded_state_list, dim=-1)
-        rewards = torch.stack(reward_list)
+        rewards = torch.stack(reward_list, dim=-1)
 
         return next_encoded_states, rewards
 
@@ -369,19 +383,22 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
 
         This is for taking the KL divergence loss
         """
-        N, encoding_size = encoding_size.shape
-        next_encoded_states, rewards = self._dynamics_all(encoded_state, action)  # assuming shapes are [N, encoding_size, 3], [N, 3]
+        N, encoding_size = encoded_state.shape
+        next_encoded_states, rewards = self._dynamics_all_futures(encoded_state, action)  # assuming shapes are [N, encoding_size, 3], [N, 3]
 
         transition_logits_prior = self.transition_prior_network(encoded_state)  # [N, 3]
         transition_logits_post = self.transition_posterior_network(torch.cat((encoded_state, future_encoded_state), dim=-1))  # [N, 3]
 
         # TODO: implement straight through (or find an existing implementation)
-        transition_sample_post = sample_straight_through(transition_logits_post)
-        # NOTE: reshape to match next_encoding_states
-        transition_sample_post_expand = transition_sample_post.view(N, 1, 3).expand(-1, encoding_size, -1)
+        # transition_sample_post = sample_straight_through(logits=transition_logits_post)
+        # NOTE: found native pytorch impl 
+        dist = OneHotCategoricalStraightThrough(logits=transition_logits_post)
+        transition_sample_post = dist.rsample()
+        # NOTE: unsqueeze to match next_encoding_states dims
+        transition_sample_post = transition_sample_post.unsqueeze(dim=1)  # [N, 1, n_futures]
 
-        next_encoded_state = (next_encoded_states * transition_sample_post_expand).sum(-1)  # [N, encoding_size]
-        reward = (rewards * transition_sample_post).sum(-1)  # [N]
+        next_encoded_state = (next_encoded_states * transition_sample_post).sum(-1)  # [N, encoding_size]
+        reward = (rewards * transition_sample_post).sum(-1)  # [N, support_dim]
 
         policy_logits, value = self.prediction(next_encoded_state)
         return value, reward, policy_logits, next_encoded_state, transition_logits_post, transition_logits_prior

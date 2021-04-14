@@ -6,7 +6,8 @@ import ray
 import torch
 
 import models
-
+from torch.distributions import Categorical
+from torch.distributions.kl import kl_divergence
 
 @ray.remote
 class Trainer:
@@ -78,6 +79,7 @@ class Trainer:
                 value_loss,
                 reward_loss,
                 policy_loss,
+                kl_loss,
             ) = self.update_weights(batch)
 
             if self.config.PER:
@@ -148,6 +150,10 @@ class Trainer:
         # NOTE: no, it doesn't. We need to modify the replay buffer sampling logic 
         #       to return with observations for all steps, instead of just
         #       the initial step with some past history
+        # NOTE: this is fixed now, by changing upstream `replay_buffer.get_batch()` behavior
+        #       if the model is stochastic
+        # non-stochastic: [N, encoding_dims]
+        # stochastic: [N, T, encoding_dims]
         observation_batch = torch.tensor(observation_batch).float().to(device)
         action_batch = torch.tensor(action_batch).long().to(device).unsqueeze(-1)
         target_value = torch.tensor(target_value).float().to(device)
@@ -168,26 +174,36 @@ class Trainer:
         # target_value: batch, num_unroll_steps+1, 2*support_size+1
         # target_reward: batch, num_unroll_steps+1, 2*support_size+1
 
+        # NOTE: just debugging, don't mind me
+        # print(f'Observation batch shape: {observation_batch.shape}')
+        # print(f'Action batch shape: {action_batch.shape}')
+
         if self.is_stochastic_model:
             ## Generate predictions
             value, reward, policy_logits, hidden_state = self.model.initial_inference(
-                observation_batch[0]
+                observation_batch[:, 0]
             )
 
             hidden_states_from_observation = [hidden_state]
             predictions = [(value, reward, policy_logits)]
-            transition_logits = []
+            # NOTE: this is just to make the indexing work out
+            transition_logits = [None]  
 
             # TODO: we need to iterate over all timesteps, and run model.representation
             #       to obtain all the hidden states across time
+            # NOTE: done
             for i in range(1, action_batch.shape[1]):
-                hidden_state = self.representation(observation_batch[i])
+                hidden_state = self.model.representation(observation_batch[:, i])
                 hidden_states_from_observation.append(hidden_state)
 
             # TODO: we need to pass in the next_hidden_state as well here (computed in a loop in the previous TODO)
             #       this is because we need it to do inference for the posterior transition logits
+            # NOTE: done
             hidden_state = hidden_states_from_observation[0]
             for i in range(1, action_batch.shape[1]):
+                # NOTE: Don't mind me, just debugging
+                # print(f'Per timestep hidden state size is: {hidden_state.shape}')
+                # print(f'Per timestep action size is: {action_batch[:, i].shape}')
                 value, reward, policy_logits, hidden_state, transition_logits_post, transition_logits_prior = self.model.recurrent_inference(
                     hidden_state, action_batch[:, i], hidden_states_from_observation[i]
                 )
@@ -213,8 +229,7 @@ class Trainer:
 
         ## Compute losses
         value_loss, reward_loss, policy_loss = (0, 0, 0)
-        if self.is_stochastic_model:
-            kl_loss = 0.
+        kl_loss = 0.
         value, reward, policy_logits = predictions[0]
         # Ignore reward loss for the first batch step
         current_value_loss, _, current_policy_loss = self.loss_function(
@@ -270,7 +285,7 @@ class Trainer:
             if self.is_stochastic_model:
                 # TODO: compute KL divergence loss between the posterior transition logits and prior transition logits
                 transition_logits_post, transition_logits_prior = transition_logits[i]
-                current_kl_loss = kl_loss(transition_logits_post, transition_logits_prior)
+                current_kl_loss = kl_loss_criterion(transition_logits_post, transition_logits_prior)
                 current_kl_loss.register_hook(lambda grad: grad / gradient_scale_batch[:, i])
                 kl_loss += current_kl_loss
 
@@ -315,6 +330,7 @@ class Trainer:
             value_loss.mean().item(),
             reward_loss.mean().item(),
             policy_loss.mean().item(),
+            kl_loss.mean().item(),
         )
 
     def update_lr(self):
@@ -344,5 +360,8 @@ class Trainer:
         )
         return value_loss, reward_loss, policy_loss
 
-def kl_loss(transition_logits_post, transition_logits_prior):
-    raise NotImplementedError
+def kl_loss_criterion(transition_logits_post, transition_logits_prior):
+    post_dist = Categorical(logits=transition_logits_post)
+    prior_dist = Categorical(logits=transition_logits_prior)
+    # TODO: make sure that we do want to have KL(q|p) in that order
+    return kl_divergence(post_dist, prior_dist)

@@ -57,9 +57,15 @@ class MuZeroConfig:
 
 
         ### Network
-        self.stochastic_dynamics = True
-        self.network = "fullyconnected"  # "resnet" / "fullyconnected"
+        self.network = "stochastic"  # "resnet" / "fullyconnected" / "stochastic"
         self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
+
+        ### Stochastic
+        self.stochastic_dynamics = True
+        self.kl_loss_weight = 1.0  # TODO: tune this after code runs
+        self.n_futures = 2
+        self.fc_prior_layers = [32]  # Define the hidden layers in the value network
+        self.fc_posterior_layers = [32]  # Define the hidden layers in the policy network
 
         # Residual Network
         self.downsample = False  # Downsample observations before representation network, False / "CNN" (lighter) / "resnet" (See paper appendix Network Architecture)

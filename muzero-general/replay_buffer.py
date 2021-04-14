@@ -87,7 +87,7 @@ class ReplayBuffer:
             )
 
             index_batch.append([game_id, game_pos])
-            is_stochastic_dynamics = getattr(self.config, 'stochastic_dynamics', False):
+            is_stochastic_dynamics = getattr(self.config, 'stochastic_dynamics', False)
 
             if is_stochastic_dynamics:
                 # to train stochastic dynamics model, we need full sequence of observations starting from the 
@@ -143,7 +143,7 @@ class ReplayBuffer:
             ),
         )
 
-    def get_observation_with_future(game_history, state_index):
+    def get_observation_with_future(self, game_history, state_index):
         observations = []
         for current_index in range(
             state_index, state_index + self.config.num_unroll_steps + 1
