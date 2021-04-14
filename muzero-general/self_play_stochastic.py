@@ -163,7 +163,7 @@ class SelfPlay:
                     if render:
                         print(f'Tree depth: {mcts_info["max_tree_depth"]}')
                         print(
-                            f"Root value for player {self.game.to_play()}: {root.value():.2f}"
+                            f"Root value for player {self.game.to_play()}: {root.value:.2f}"
                         )
                 else:
                     action, root = self.select_opponent_action(
@@ -208,7 +208,7 @@ class SelfPlay:
                 True,
             )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
-            print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
+            print(f"Root value for player {self.game.to_play()}: {root.value:.2f}")
             print(
                 f"Player {self.game.to_play()} turn. MuZero suggests {self.game.action_to_string(self.select_action(root, 0))}"
             )
@@ -403,35 +403,34 @@ class MCTS:
         """
         assert len(self.config.players) == 1, f'Number of players should be 1, but is {len(self.config.players)}'
 
-        for node in reversed(search_path):
-            node.value_sum += value
+        search_path[-1].value = value
+        search_path[-1].visit_count += 1
+
+        for node in reversed(search_path[:-1]):
             node.visit_count += 1
+            node.update_value()
 
             if isinstance(node, TransitionNode):
+                node.update_value(self.config.discount)
                 # no discounting through a transition node
-                value = value
+
             elif isinstance(node, StateNode):
-                value = node.reward + self.config.discount * value
-                min_max_stats.update(node.reward + self.config.discount * node.value())
+                node.update_value()
+                min_max_stats.update(node.reward + self.config.discount * node.value)
 
 
 class Node:
     def __init__(self, prior):
         self.visit_count = 0
+        self.value = 0
         self.to_play = -1
         self.prior = prior
-        self.value_sum = 0
         self.children = {}
         self.hidden_state = None
         self.reward = 0
 
     def expanded(self):
         return len(self.children) > 0
-
-    def value(self):
-        if self.visit_count == 0:
-            return 0
-        return self.value_sum / self.visit_count
 
     def add_exploration_noise(self, dirichlet_alpha, exploration_fraction):
         """
@@ -448,6 +447,17 @@ class Node:
 class StateNode(Node):
     def __init__(self, prior):
         super().__init__(prior)
+
+    def update_value(self):
+        assert self.visit_count > 0
+        
+        sum = 0
+        counts = 0
+        for _, child in self.children.items():
+            sum += child.visit_count * child.value
+            counts += child.visit_count
+        assert counts > 0
+        self.value = sum / counts
 
     def expand(self, actions, to_play, reward, policy_logits, hidden_state):
         """
@@ -501,7 +511,7 @@ class StateNode(Node):
             value_score = min_max_stats.normalize(
                 child.reward
                 + config.discount
-                * (child.value() if len(config.players) == 1 else -child.value())
+                * (child.value if len(config.players) == 1 else -child.value)
             )
         else:
             value_score = 0
@@ -514,6 +524,17 @@ class TransitionNode(Node):
 
         self.child_hidden_states = []
         self.child_rewards = []
+
+    def update_value(self, discount):
+        assert self.visit_count > 0
+        
+        visited_children_values = []
+        for _, child in self.children.items():
+            if child.visit_count > 0:
+                visited_children_values.append(child.reward + discount * child.value)
+        assert len(visited_children_values) > 0
+        self.value = min(visited_children_values)
+
 
     def select_child(self, min_max_stats, config):
         """
@@ -587,7 +608,7 @@ class GameHistory:
                 ]
             )
 
-            self.root_values.append(root.value())
+            self.root_values.append(root.value)
         else:
             self.root_values.append(None)
 
