@@ -16,4 +16,4 @@ conda activate treesearch
 
 cd /h/suo/dev/tree-search-planning/muzero-general
 source ../project_suo.env
-python -u muzero_interactive.py roundabout_env_ttc_flat_stochastic
+python -u muzero_interactive.py roundabout_env_ttc_flat_stochastic_concat

@@ -64,6 +64,8 @@ class MuZero:
             else:
                 self.config = config
 
+        wandb.config.update(self.config)
+
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
         torch.manual_seed(self.config.seed)

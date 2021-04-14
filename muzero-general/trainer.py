@@ -18,7 +18,8 @@ class Trainer:
 
     def __init__(self, initial_checkpoint, config):
         self.config = config
-        self.is_stochastic_model = config.network == 'stochastic'
+        # NOTE: 'mock_stochastic' uses stochastic dynamics, but is not a stochastic model
+        self.is_stochastic_model = config.network in ['stochastic', 'stochastic_concat']
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -194,7 +195,14 @@ class Trainer:
             #       to obtain all the hidden states across time
             # NOTE: done
             for i in range(1, action_batch.shape[1]):
-                hidden_state = self.model.representation(observation_batch[:, i])
+                # NOTE: we will receive nans when the index is past an absorbing state
+                #       in this case, we bypass the representation function, and directly set the hidden state to zeros
+                if torch.isnan(observation_batch[:, i]).any():
+                    hidden_state = torch.zeros_like(hidden_states_from_observation[0])
+                else:
+                    hidden_state = self.model.representation(observation_batch[:, i])
+                # NOTE: we don't want the gradient flowing through representation function applied to future states
+                hidden_state = hidden_state.detach()
                 hidden_states_from_observation.append(hidden_state)
 
             # TODO: we need to pass in the next_hidden_state as well here (computed in a loop in the previous TODO)

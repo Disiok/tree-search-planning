@@ -158,7 +158,7 @@ class ReplayBuffer:
             else:
                 # There's no observation for states past the end of games 
                 # Since they are treated as absorbing states, we can just return all zero observation
-                observation = numpy.zeros_like(observations[0])
+                observation = numpy.full_like(observations[0], numpy.nan)
 
             observations.append(observation)
         
