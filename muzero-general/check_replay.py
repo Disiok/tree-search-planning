@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pickle
 import sys
 
@@ -23,6 +24,23 @@ if len(sys.argv) > 1:
 
     rews = [x.reward_history for x in bufs]
     rets = [sum(x) for x in rews]
+
+
+n2 = 0
+
+for _ in range(10000):
+    end = False
+    rews = 0
+    env.reset()
+    while not end:
+        obs, rew, end, others = env.step(np.random.randint(5))
+        rews += rew
+    if rews > 1:
+        n2 += 1
+
+    print(rews)
+
+print(n2)
 
 import pdb; pdb.set_trace()
 

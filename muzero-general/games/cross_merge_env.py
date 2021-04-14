@@ -17,6 +17,21 @@ NUM_SPEEDS = 5
 HORIZON = 10
 FIXED_VELOCITY_GRID = True
 
+
+two = {'dim': 423,
+       'name': '2lane',
+       'cfg': '2lane.json'
+       }
+
+one = {'dim': 183,
+       'name': '1lane',
+       'cfg': '1lane.json'
+       }
+
+cfg = {}
+cfgs = {'one': one, 'two': two}
+
+
 class MuZeroConfig:
     def __init__(self):
         # More information is available here: https://github.com/werner-duvaud/muzero-general/wiki/Hyperparameter-Optimization
@@ -28,7 +43,7 @@ class MuZeroConfig:
 
         ### Game
         #self.observation_shape = (1, 1, NUM_SPEEDS * NUM_LANES * HORIZON + NUM_SPEEDS)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
-        self.observation_shape = (1, 1, 423)
+        self.observation_shape = (1, 1, cfg['dim'])
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 1  # Number of previous observations and previous actions to add to the current observation
@@ -44,7 +59,7 @@ class MuZeroConfig:
         self.selfplay_on_gpu = False
         self.max_moves = 500  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
-        self.discount = 1.0 # 0.975  # 0.997  # Chronological discount of the reward
+        self.discount = 0.995  # 0.975  # 0.997  # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
 
         # Root prior exploration noise
@@ -53,7 +68,7 @@ class MuZeroConfig:
 
         # UCB formula
         self.pb_c_base = 19652
-        self.pb_c_init = 1.
+        self.pb_c_init = 1.5
 
 
         ### Network
@@ -83,13 +98,23 @@ class MuZeroConfig:
 
         ### Training
         # self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], 'hyperparameter_search_normalized_random_dirichlet', datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
-        self.results_path = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)),
-            "../results", os.path.basename(__file__)[:-3],
-            '2lane0ac_day2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
-        )  # Path to store the model weights and TensorBoard logs
+        
+        if 'exp_name' in cfg:
+            self.results_path = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../results", os.path.basename(__file__)[:-3],
+                f'{cfg["exp_name"]}'
+            )  # Path to store the model weights and TensorBoard logs
+        else:
+            self.results_path = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../results", os.path.basename(__file__)[:-3],
+                f'{cfg["name"]}_day3' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            )  # Path to store the model weights and TensorBoard logs
+
+        self.cfg_file = cfg['cfg']
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 5000  # Total number of training steps (ie weights update according to a batch)
+        self.training_steps = 10000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 512 # Number of parts of games to train on at each training step
         self.checkpoint_interval = 300  # 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1.0  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
@@ -106,13 +131,12 @@ class MuZeroConfig:
         self.lr_decay_steps = 15000
 
 
-
         ### Replay Buffer
         self.replay_buffer_size = int(1e3)  # Number of self-play games to keep in the replay buffer
         self.num_unroll_steps = 5  # Number of game moves to keep for every batch element
         self.td_steps = 16  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
-        self.PER_alpha = 0.5  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
+        self.PER_alpha = 1.0  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
 
         # Reanalyze (See paper appendix Reanalyse)
         self.use_last_model_value = True  # Use the last model to provide a fresher, stable n-step value (See paper appendix Reanalyze)
@@ -134,8 +158,8 @@ class MuZeroConfig:
         Returns:
             Positive float.
         """
-        end = 0.25
-        beg = 10
+        end = 1.0
+        beg = 5
         return end + (1 - trained_steps / self.training_steps) * beg
 
         if trained_steps < 0.5 * self.training_steps:
@@ -153,10 +177,10 @@ class Game(AbstractGame):
 
     ENV_NAME = 'cross-merge-v0'
 
-    def __init__(self, seed=None, monitor_path=None):
+    def __init__(self, cfg_file='', seed=None, monitor_path=None):
         # self.env = gym.make(self.ENV_NAME)
         this_dir = os.path.dirname(os.path.abspath(__file__))
-        self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', 'env_no_actors_2lane.json'))
+        self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', cfg_file))
         
         if monitor_path is not None:
             self.env = MonitorV2(self.env, monitor_path, video_callable=False)
