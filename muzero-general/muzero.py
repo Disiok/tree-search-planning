@@ -22,6 +22,7 @@ import self_play_stochastic
 import self_play_local_stochastic
 import shared_storage
 import trainer
+import wandb
 
 
 class MuZero:
@@ -43,6 +44,7 @@ class MuZero:
     """
 
     def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False):
+        wandb.init(project='tree-search-planning', entity='disiok')
         # Load the game and the config from the module with the game name
         try:
             game_module = importlib.import_module("games." + game_name)
@@ -314,6 +316,7 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
+                wandb.log(info)
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
