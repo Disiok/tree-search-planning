@@ -51,8 +51,13 @@ class CrossMergeEnv(AbstractEnv):
         #if n_crashed > 0:
         #    print(f"{n_crashed} othere vehicles crashed")
         
-        return super().step(*args, **kwargs)
+        obs, reward, terminal, info = super().step(*args, **kwargs)
+        info["num_goals_reached"] = len(self.reached_goals)
+        info["speed"] = self.vehicle.speed
+        info["reward"] = reward
 
+        return obs, reward, terminal, info
+    
     def _reward(self, action: int) -> float:
         """
         The vehicle is rewarded for driving with high speed on lanes to the right and avoiding collisions
@@ -82,6 +87,8 @@ class CrossMergeEnv(AbstractEnv):
             if dist < self.config['goal_radius']:
                 reward += self.config['goal_reward']
                 self.reached_goals.append(goal)
+                if len(self.reached_goals) == 2:
+                    print("both goals reached!!")
                 #self.goals.pop(idx)
                 break
         
