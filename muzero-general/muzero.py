@@ -110,14 +110,8 @@ class MuZero:
             _temp_dir=os.environ['RAY_TEMP_DIR'],
             num_gpus=total_gpus,
             ignore_reinit_error=True,
-<<<<<<< HEAD
             object_store_memory=10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
         )
-=======
-            object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
-            dashboard_host="0.0.0.0"
-            )
->>>>>>> james/cross_merge_env
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -328,11 +322,6 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-<<<<<<< HEAD
-=======
-                # log_to_wandb(info)
-                
->>>>>>> james/cross_merge_env
                 writer.add_scalar(
                     "0.visit_dist_entropy", info["visit_dist_entropy"], counter
                 )
@@ -386,11 +375,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 writer.add_scalar("3.Loss/Reconstruction_loss", info["reconstruction_loss"], counter)
                 print(
-<<<<<<< HEAD
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Value Loss: {info["value_loss"]:.2f}. Reward Loss: {info["reward_loss"]:.2f}')
-=======
-                        f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Value loss: {info["value_loss"]:.2f}. Reward loss: {info["reward_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Policy Entropy: {info["policy_ent"]:.3f}. Visit Entropy: {info["visit_dist_entropy"]:.3f}. Avg visit dist: {info["avg_visit_dist"]}. Best return: {info["best_return"]:.2f}.')
->>>>>>> james/cross_merge_env
                 counter += 1
 
                 if counter % 500 == 0 and self.config.save_model:
@@ -610,7 +595,6 @@ class CPUActor:
         return weigths, summary
 
 
-<<<<<<< HEAD
 # def log_to_wandb(measurements, prefix=""):
 #     logs = {}
 #     for k, v in measurements.items():
@@ -619,12 +603,3 @@ class CPUActor:
 # 	    logs[key] = v[-1]
 #     wandb.log(logs)
 # 
-=======
-def log_to_wandb(measurements, prefix=""):
-    logs = {}
-    for k, v in measurements.items():
-        key = f"{prefix}_{k}" if prefix else k
-        if v:
-            logs[key] = v
-    wandb.log(logs)
->>>>>>> james/cross_merge_env
