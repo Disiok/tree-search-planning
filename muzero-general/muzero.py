@@ -21,8 +21,6 @@ import self_play_local
 import shared_storage
 import trainer
 
-import wandb
-
 
 class MuZero:
     """
@@ -297,8 +295,6 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-                log_to_wandb(info)
-
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
@@ -567,10 +563,11 @@ class CPUActor:
         return weigths, summary
 
 
-def log_to_wandb(measurements, prefix=""):
-    logs = {}
-    for k, v in measurements.items():
-	key = f"{prefix}_{k}" if prefix else k
-	if v:
-	    logs[key] = v[-1]
-    wandb.log(logs)
+# def log_to_wandb(measurements, prefix=""):
+#     logs = {}
+#     for k, v in measurements.items():
+# 	key = f"{prefix}_{k}" if prefix else k
+# 	if v:
+# 	    logs[key] = v[-1]
+#     wandb.log(logs)
+# 

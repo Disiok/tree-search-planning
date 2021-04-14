@@ -28,8 +28,8 @@ class MuZeroConfig:
 
         ### Game
         #self.observation_shape = (1, 1, NUM_SPEEDS * NUM_LANES * HORIZON + NUM_SPEEDS)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
-        self.observation_shape = (1, 1, 423)
-        # self.observation_shape = (1, 1, 183)
+        # self.observation_shape = (1, 1, 423)
+        self.observation_shape = (1, 1, 183)
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 1  # Number of previous observations and previous actions to add to the current observation
@@ -164,8 +164,8 @@ class Game(AbstractGame):
     def __init__(self, seed=None, monitor_path=None):
         # self.env = gym.make(self.ENV_NAME)
         this_dir = os.path.dirname(os.path.abspath(__file__))
-        self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', 'env_no_actors_2lane.json'))
-        # self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', '1lane.json'))
+        # self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', 'env_no_actors_2lane.json'))
+        self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', '1lane.json'))
         
         if monitor_path is not None:
             self.env = MonitorV2(self.env, monitor_path, video_callable=False)
