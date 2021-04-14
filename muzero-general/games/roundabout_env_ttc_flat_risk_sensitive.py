@@ -62,6 +62,7 @@ class MuZeroConfig:
 
         ### Stochastic
         self.stochastic_dynamics = True
+        self.risk_sensitive = True
         self.kl_loss_weight = 1.0  # TODO: tune this after code runs
         self.n_futures = 2
         self.fc_prior_layers = [32]  # Define the hidden layers in the value network
@@ -93,7 +94,7 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            'safe_stochastic_concat' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            'risk_sensitive_test' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
