@@ -17,6 +17,7 @@ class Trainer:
 
     def __init__(self, initial_checkpoint, config):
         self.config = config
+        self.is_stochastic_model = config.network == 'stochastic'
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -167,27 +168,53 @@ class Trainer:
         # target_value: batch, num_unroll_steps+1, 2*support_size+1
         # target_reward: batch, num_unroll_steps+1, 2*support_size+1
 
-        ## Generate predictions
-        value, reward, policy_logits, hidden_state = self.model.initial_inference(
-            observation_batch
-        )
+        if self.is_stochastic_model:
+            ## Generate predictions
+            value, reward, policy_logits, hidden_state = self.model.initial_inference(
+                observation_batch[0]
+            )
 
-        # TODO: we need to iterate over all timesteps, and run model.representation
-        #       to obtain all the hidden states across time
-        predictions = [(value, reward, policy_logits)]
-        for i in range(1, action_batch.shape[1]):
+            hidden_states_from_observation = [hidden_state]
+            predictions = [(value, reward, policy_logits)]
+            transition_logits = []
+
+            # TODO: we need to iterate over all timesteps, and run model.representation
+            #       to obtain all the hidden states across time
+            for i in range(1, action_batch.shape[1]):
+                hidden_state = self.representation(observation_batch[i])
+                hidden_states_from_observation.append(hidden_state)
+
             # TODO: we need to pass in the next_hidden_state as well here (computed in a loop in the previous TODO)
             #       this is because we need it to do inference for the posterior transition logits
-            value, reward, policy_logits, hidden_state = self.model.recurrent_inference(
-                hidden_state, action_batch[:, i]
+            hidden_state = hidden_states_from_observation[0]
+            for i in range(1, action_batch.shape[1]):
+                value, reward, policy_logits, hidden_state, transition_logits_post, transition_logits_prior = self.model.recurrent_inference(
+                    hidden_state, action_batch[:, i], hidden_states_from_observation[i]
+                )
+                # Scale the gradient at the start of the dynamics function (See paper appendix Training)
+                hidden_state.register_hook(lambda grad: grad * 0.5)
+                predictions.append((value, reward, policy_logits))
+                transition_logits.append((transition_logits_post, transition_logits_prior))
+        else:
+            ## Generate predictions
+            value, reward, policy_logits, hidden_state = self.model.initial_inference(
+                observation_batch
             )
-            # Scale the gradient at the start of the dynamics function (See paper appendix Training)
-            hidden_state.register_hook(lambda grad: grad * 0.5)
-            predictions.append((value, reward, policy_logits))
+
+            predictions = [(value, reward, policy_logits)]
+            for i in range(1, action_batch.shape[1]):
+                value, reward, policy_logits, hidden_state = self.model.recurrent_inference(
+                    hidden_state, action_batch[:, i]
+                )
+                # Scale the gradient at the start of the dynamics function (See paper appendix Training)
+                hidden_state.register_hook(lambda grad: grad * 0.5)
+                predictions.append((value, reward, policy_logits))
         # predictions: num_unroll_steps+1, 3, batch, 2*support_size+1 | 2*support_size+1 | 9 (according to the 2nd dim)
 
         ## Compute losses
         value_loss, reward_loss, policy_loss = (0, 0, 0)
+        if self.is_stochastic_model:
+            kl_loss = 0.
         value, reward, policy_logits = predictions[0]
         # Ignore reward loss for the first batch step
         current_value_loss, _, current_policy_loss = self.loss_function(
@@ -198,9 +225,9 @@ class Trainer:
             target_reward[:, 0],
             target_policy[:, 0],
         )
+        # NOTE: there's no KL loss for the first timestep
         value_loss += current_value_loss
         policy_loss += current_policy_loss
-        # TODO: compute KL divergence loss between the posterior transition logits and prior transition logits
         # Compute priorities for the prioritized replay (See paper appendix Training)
         pred_value_scalar = (
             models.support_to_scalar(value, self.config.support_size)
@@ -240,6 +267,13 @@ class Trainer:
                 lambda grad: grad / gradient_scale_batch[:, i]
             )
 
+            if self.is_stochastic_model:
+                # TODO: compute KL divergence loss between the posterior transition logits and prior transition logits
+                transition_logits_post, transition_logits_prior = transition_logits[i]
+                current_kl_loss = kl_loss(transition_logits_post, transition_logits_prior)
+                current_kl_loss.register_hook(lambda grad: grad / gradient_scale_batch[:, i])
+                kl_loss += current_kl_loss
+
             value_loss += current_value_loss
             reward_loss += current_reward_loss
             policy_loss += current_policy_loss
@@ -262,6 +296,9 @@ class Trainer:
         if self.config.PER:
             # Correct PER bias by using importance-sampling (IS) weights
             loss *= weight_batch
+        if self.is_stochastic_model:
+            loss += self.config.kl_loss_weight * kl_loss
+
         # Mean over batch dimension (pseudocode do a sum)
         loss = loss.mean()
 
@@ -306,3 +343,6 @@ class Trainer:
             1
         )
         return value_loss, reward_loss, policy_loss
+
+def kl_loss(transition_logits_post, transition_logits_prior):
+    raise NotImplementedError

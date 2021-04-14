@@ -9,6 +9,7 @@ class MuZeroNetwork:
     def __new__(cls, config):
         stochastic_dynamics = hasattr(config, 'stochastic_dynamics') and config.stochastic_dynamics
         if config.network == "fullyconnected" and not stochastic_dynamics:
+            assert not stochastic_dynamics, 'Cannot use stochastic MCTS if we use standard model'
             return MuZeroFullyConnectedNetwork(
                 config.observation_shape,
                 config.stacked_observations,
@@ -21,8 +22,23 @@ class MuZeroNetwork:
                 config.fc_dynamics_layers,
                 config.support_size,
             )
-        elif config.network == "fullyconnected" and stochastic_dynamics:
+        elif config.network == "mock_stochastic":
+            assert stochastic_dynamics, 'Must use stochastic MCTS if we use mock stochastic model'
             return MockMuZeroStochastic(
+                config.observation_shape,
+                config.stacked_observations,
+                len(config.action_space),
+                config.encoding_size,
+                config.fc_reward_layers,
+                config.fc_value_layers,
+                config.fc_policy_layers,
+                config.fc_representation_layers,
+                config.fc_dynamics_layers,
+                config.support_size,
+            )
+        elif config.network == 'stochastic':
+            assert stochastic_dynamics, 'Must use stochastic MCTS if we use stochastic model'
+            return MuZeroStochastic(
                 config.observation_shape,
                 config.stacked_observations,
                 len(config.action_space),
@@ -274,7 +290,6 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
         self.transition_posterior_network = torch.nn.DataParallel(
             mlp(encoding_size + encoding_size, fc_posterior_layers, self.n_futures)
         )
-        
 
     def dynamics(self, encoded_state, action):
         """
