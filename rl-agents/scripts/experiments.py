@@ -9,6 +9,7 @@ Options:
   --episodes <count>     Number of episodes [default: 5].
   --no-display           Disable environment, agent, and rewards rendering.
   --name-from-config     Name the output folder from the corresponding config files
+  --exp-name <str>       Name the output folder explicitly
   --processes <count>    Number of running processes [default: 4].
   --recover              Load model from the latest checkpoint.
   --recover-from <file>  Load model from a given checkpoint.
@@ -59,6 +60,8 @@ def evaluate(environment_config, agent_config, options):
     env = load_environment(environment_config)
     agent = load_agent(agent_config, env)
     run_directory = None
+    if options['--exp-name']:
+        run_directory = options['--exp-name']
     if options['--name-from-config']:
         run_directory = "{}_{}_{}".format(Path(agent_config).with_suffix('').name,
                                   datetime.datetime.now().strftime('%Y%m%d-%H%M%S'),

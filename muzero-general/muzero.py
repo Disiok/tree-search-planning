@@ -103,7 +103,8 @@ class MuZero:
             num_gpus=total_gpus,
             ignore_reinit_error=True,
             object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
-        )
+            dashboard_host="0.0.0.0"
+            )
 
         # Checkpoint and replay buffer used to initialize workers
         self.checkpoint = {
@@ -364,7 +365,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 writer.add_scalar("3.Loss/KL_loss", info["kl_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
+                        f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Value loss: {info["value_loss"]:.2f}. Reward loss: {info["reward_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}.')
                 counter += 1
 
                 if counter % 1000 == 0 and self.config.save_model:
