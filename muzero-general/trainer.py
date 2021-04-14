@@ -102,6 +102,7 @@ class Trainer:
                 value_loss,
                 reward_loss,
                 policy_loss,
+                kl_loss,
             ) = self.update_weights(batch, shared_storage)
 
             if self.config.PER:
@@ -248,6 +249,7 @@ class Trainer:
             ## Generate predictions
             value, reward, policy_logits, hidden_state = self.model.initial_inference(
                 observation_batch
+            )
 
             if shared_storage:
                 policy_conf = torch.softmax(policy_logits, -1)

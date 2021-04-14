@@ -16,7 +16,13 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed):
         self.config = config
-        self.game = Game(seed)
+
+        # NOTE: hack from James necessary to load the cross merge env
+        cfg_file = getattr(config, 'cfg_file', None)
+        if cfg_file is None:
+            self.game = Game(seed)
+        else:
+            self.game = Game(seed, config.cfg_file)
 
         # Fix random generator seed
         numpy.random.seed(seed)
