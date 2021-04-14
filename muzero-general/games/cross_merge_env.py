@@ -28,6 +28,27 @@ two = {'dim': 423,
        'training_steps': 30000,
        }
 
+
+two_dense = {'dim': 423,
+       'name': '2lane_dense',
+       'cfg': '2lane_dense.json',
+       'batch_size': 1024,
+       'encoding_size': 512,
+       'fc_representation_layers': [512, 256, 256],
+       'fc_dynamics_layers': [256],  # Define the hidden layers in the dynamics network
+       'training_steps': 30000,
+       }
+
+two_aggro = {'dim': 423,
+       'name': '2lane_aggro',
+       'cfg': '2lane_aggro.json',
+       'batch_size': 1024,
+       'encoding_size': 512,
+       'fc_representation_layers': [512, 256, 256],
+       'fc_dynamics_layers': [256],  # Define the hidden layers in the dynamics network
+       'training_steps': 30000,
+       }
+
 one = {'dim': 183,
        'name': '1lane',
        'cfg': '1lane.json'
@@ -49,7 +70,7 @@ one_aggro = {'dim': 183,
        }
 
 cfg = {}
-cfgs = {'one': one, 'two': two, 'one_dense': one_dense, 'one_sparse': one_sparse, 'one_aggro': one_aggro}
+cfgs = {'one': one, 'two': two, 'one_dense': one_dense, 'one_sparse': one_sparse, 'one_aggro': one_aggro, 'two_dense': two_dense, 'two_aggro': two_aggro}
 
 
 class MuZeroConfig:
@@ -270,7 +291,7 @@ class Game(AbstractGame):
     
     def save_gif(self):
         imageio.mimsave(
-            f'/Users/sergio/tree-search-planning/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
+            f'/h/jtu/tree-search-planning/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
             self.gif_imgs,
             fps=5,
         )
