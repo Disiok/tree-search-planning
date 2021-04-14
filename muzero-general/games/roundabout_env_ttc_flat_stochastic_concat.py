@@ -247,7 +247,8 @@ class Game(AbstractGame):
     
     def save_gif(self):
         imageio.mimsave(
-            f'/Users/sergio/tree-search-planning/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
+            # f'/Users/sergio/tree-search-planning/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
+            f'/h/suo/gifs/{datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")}.gif',
             self.gif_imgs,
             fps=5,
         )

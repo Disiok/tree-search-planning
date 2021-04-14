@@ -42,7 +42,7 @@ def evaluate(model, env, checkpoint_path, n_episodes, num_gpus):
     elif model == 'alphazero':
         raise NotImplementedError('TODO: Hook up alphazero from Kelvin')
     else: 
-        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py`)
+        raise NotImplementedError('TODO: Merge in rl-agent experiments.py')
 
     return result
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='muzero')
     parser.add_argument('--env', type=str, default='highway_env')
     parser.add_argument('--checkpoint_path', type=str, default='/h/suo/dev/tree-search-planning/muzero-general/results/highway_env/2021-03-14--22-39-32/model.checkpoint')
-    parser.add_argument('--n_episodes', type=int, default=5)
+    parser.add_argument('--n_episodes', type=int, default=50)
     parser.add_argument('--num_gpus', type=int, default=1)
     args = parser.parse_args()
 

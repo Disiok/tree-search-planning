@@ -21,13 +21,18 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed, directory=None, run_directory=None):
         self.game_cls = Game
+        self.config = config
 
         # monitoring
         self.directory = Path(directory or self.default_directory)
         self.run_directory = self.directory / (run_directory or self.default_run_directory)
 
-        self.config = config
-        self.game = Game(seed, monitor_path=self.run_directory)
+        # NOTE: hack from James necessary to load the cross merge env
+        cfg_file = getattr(config, 'cfg_file', None)
+        if cfg_file is None:
+            self.game = Game(seed, monitor_path=self.run_directory)
+        else:
+            self.game = Game(seed, config.cfg_file, monitor_path=self.run_directory)
 
         # Fix random generator seed
         numpy.random.seed(seed)
@@ -188,7 +193,7 @@ class SelfPlay:
 
     @property
     def default_directory(self):
-        return Path(self.OUTPUT_FOLDER) / self.game_cls.ENV_NAME / 'MuZero'
+        return Path(self.OUTPUT_FOLDER) / self.game_cls.ENV_NAME / self.config.network
 
     @property
     def default_run_directory(self):
