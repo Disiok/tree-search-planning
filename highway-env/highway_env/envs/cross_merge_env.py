@@ -255,13 +255,23 @@ class CrossMergeEnv(AbstractEnv):
 
 def point2line_dist(p, v1, v2):
     v1p = p - v1
-    v1v2 = v2 - v1
-    v1v2_norm = np.linalg.norm(v1v2)
-    v1p_proj = np.dot(v1p, v1v2) / v1v2_norm
+    v2p = p - v2
+
+    vp, fp = (v1p, v2p) if np.linalg.norm(v1p) < np.linalg.norm(v2p) else (v2p, v1p)
+    vv = vp - fp
+    pvv = np.dot(vv, vp)
+
+    vv_norm = np.linalg.norm(vv)
+    vp_proj = np.dot(vp, vv) / vv_norm
     
-    hdist = max(0, v1p_proj - v1v2_norm)
-    dist = np.sqrt(-(v1p_proj ** 2) + np.linalg.norm(v1p) ** 2 + hdist ** 2)
-        
+
+    if pvv > 0:
+        dist = np.sqrt(-(vp_proj ** 2) + np.linalg.norm(vp) ** 2)
+    else:
+        dist = np.linalg.norm(vp)
+
+    #print(p, v1, v2)
+    #print('dist', dist)
 
     return  dist
 

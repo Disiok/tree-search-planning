@@ -16,7 +16,7 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed):
         self.config = config
-        self.game = Game(seed)
+        self.game = Game(seed=seed,cfg_file=config.cfg_file)
 
         # Fix random generator seed
         numpy.random.seed(seed)
@@ -48,7 +48,6 @@ class SelfPlay:
                     "self",
                     0,
                 )
-
                 replay_buffer.save_game.remote(game_history, shared_storage)
 
             else:
