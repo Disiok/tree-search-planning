@@ -20,7 +20,12 @@ FIXED_VELOCITY_GRID = True
 
 two = {'dim': 423,
        'name': '2lane',
-       'cfg': '2lane.json'
+       'cfg': '2lane.json',
+       'batch_size': 1024,
+       'encoding_size': 512,
+       'fc_representation_layers': [512, 256, 256],
+       'fc_dynamics_layers': [256],  # Define the hidden layers in the dynamics network
+       'training_steps': 30000,
        }
 
 one = {'dim': 183,
@@ -149,7 +154,7 @@ class MuZeroConfig:
         ### Replay Buffer
         self.replay_buffer_size = int(1e3)  # Number of self-play games to keep in the replay buffer
         self.num_unroll_steps = 5  # Number of game moves to keep for every batch element
-        self.td_steps = 16  # Number of steps in the future to take into account for calculating the target value
+        self.td_steps = 17  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
         self.PER_alpha = 1.0  # How much prioritization is used, 0 corresponding to the uniform case, paper suggests 1
 
@@ -158,12 +163,16 @@ class MuZeroConfig:
         self.reanalyse_on_gpu = False
 
 
-
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
         self.training_delay = 0  # Number of seconds to wait after each training step
         self.ratio = None  # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
 
+        for attr in dir(self):
+            if attr in cfg:
+                print("Overwriting config." + attr)
+                setattr(self, attr, cfg[attr])
+        
 
     def visit_softmax_temperature_fn(self, trained_steps):
         """
