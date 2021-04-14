@@ -1,0 +1,17 @@
+{
+    "id": "cross-merge-v0",
+    "import_module": "highway_env",
+	"road_length": 300,
+	"num_lanes": 1,
+	"actor_density": 0.4,
+	"actor_speed_mean": 25,
+	"actor_speed_std": 3,
+	"actor_spawn_sep": 20,
+	"goal_reward": 1,
+	"goal_radius": 2,
+	"veh_type": "SelfishReckless",
+    "observation": {
+        "type": "TTCGWithVelocity",
+        "fixed_velocity_grid": true
+    }
+}
