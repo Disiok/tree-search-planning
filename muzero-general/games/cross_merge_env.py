@@ -28,8 +28,23 @@ one = {'dim': 183,
        'cfg': '1lane.json'
        }
 
+one_dense = {'dim': 183,
+       'name': '1lane_dense',
+       'cfg': '1lane_dense.json'
+       }
+
+one_sparse = {'dim': 183,
+       'name': '1lane_sparse',
+       'cfg': '1lane_sparse.json'
+       }
+
+one_aggro = {'dim': 183,
+       'name': '1lane_aggro',
+       'cfg': '1lane_aggro.json'
+       }
+
 cfg = {}
-cfgs = {'one': one, 'two': two}
+cfgs = {'one': one, 'two': two, 'one_dense': one_dense, 'one_sparse': one_sparse, 'one_aggro': one_aggro}
 
 
 class MuZeroConfig:
@@ -180,6 +195,7 @@ class Game(AbstractGame):
     def __init__(self, cfg_file='', seed=None, monitor_path=None):
         # self.env = gym.make(self.ENV_NAME)
         this_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"Using config {cfg_file}")
         self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', cfg_file))
         
         if monitor_path is not None:
