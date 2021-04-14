@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=40GB                          # Job Memory.
+#SBATCH -p gpu                             # Cluster
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -J muzero_stochastic               # Job Name.
+#SBATCH -o /h/suo/experiments/muzero/%J.out
+#SBATCH --mail-user=suo@cs.toronto.edu
+#SBATCH --mail-type=ALL
+
+echo Running on $(hostname)
+
+source ~/.bashrc
+conda activate treesearch
+
+cd /h/suo/dev/tree-search-planning/muzero-general
+source ../project_suo.env
+python -u muzero_interactive.py roundabout_env_ttc_flat_stochastic 
