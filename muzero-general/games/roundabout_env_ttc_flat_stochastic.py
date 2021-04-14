@@ -63,7 +63,7 @@ class MuZeroConfig:
         ### Stochastic
         self.stochastic_dynamics = True
         self.kl_loss_weight = 1.0  # TODO: tune this after code runs
-        self.n_futures = 2
+        self.n_futures = 4
         self.fc_prior_layers = [32]  # Define the hidden layers in the value network
         self.fc_posterior_layers = [32]  # Define the hidden layers in the policy network
 
@@ -93,7 +93,7 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            'roundabout_stochastic_fix_nan_detach' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            'roundabout_stochastic_4_futures' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)

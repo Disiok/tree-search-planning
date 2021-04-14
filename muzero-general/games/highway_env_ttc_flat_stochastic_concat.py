@@ -56,7 +56,7 @@ class MuZeroConfig:
 
 
         ### Network
-        self.network = "stochastic"  # "resnet" / "fullyconnected" / "stochastic"
+        self.network = "stochastic_concat"  # "resnet" / "fullyconnected" / "stochastic"
         self.support_size = 10  # Value and reward are scaled (with almost sqrt) and encoded on a vector with a range of -support_size to support_size. Choose it so that support_size <= sqrt(max(abs(discounted reward)))
 
         ### Stochastic
@@ -92,7 +92,7 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            'highway_stochastic_fix_nan_detach' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            'highway_stochastic_concat_fix_nan_detach' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
