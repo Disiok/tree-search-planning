@@ -21,6 +21,7 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed, directory=None, run_directory=None):
         self.game_cls = Game
+        self.seed = seed
 
         # monitoring
         self.directory = Path(directory or self.default_directory)
@@ -39,6 +40,9 @@ class SelfPlay:
         self.model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.model.eval()
 
+    def reset_directory(self):
+        self.run_directory = self.directory / self.default_run_directory
+
     def play_game(
         self,
         temperature,
@@ -48,7 +52,8 @@ class SelfPlay:
         muzero_player,
         save_gif=False,
         policy_only=False,
-        uniform_policy=False
+        uniform_policy=False,
+        num_simulations=None
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -67,6 +72,10 @@ class SelfPlay:
 
         if save_gif:
             self.game.render_rgb()
+
+        if num_simulations is not None:
+            # HACK(kwong): This modifies the config!
+            self.config.num_simulations = num_simulations
 
         with torch.no_grad():
             while (

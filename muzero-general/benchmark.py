@@ -25,7 +25,7 @@ import trainer
 from muzero import MuZero
 
 
-def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy):
+def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy, num_simulations):
     # Initialize MuZero
     muzero = MuZero(env)
     if checkpoint_path is not None:
@@ -40,16 +40,17 @@ def evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path, pol
         num_gpus=num_gpus,
         output_path=output_path,
         policy_only=policy_only,
-        uniform_policy=uniform_policy
+        uniform_policy=uniform_policy,
+        num_simulations=num_simulations,
     )
     ray.shutdown()
 
     return result
 
 
-def evaluate(model, env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy):
+def evaluate(model, env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy, num_simulations):
     if model == 'muzero':
-        result = evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy)
+        result = evaluate_muzero(env, checkpoint_path, n_episodes, num_gpus, output_path, policy_only, uniform_policy, num_simulations)
     elif model == 'alphazero':
         # NOTE(kwong): no need to do so; works with muzero.
         raise NotImplementedError('TODO: Hook up alphazero from Kelvin')
@@ -69,6 +70,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_path', type=str, default='/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/evaluation/')
     parser.add_argument('--policy-only', action='store_true', default=False)
     parser.add_argument('--uniform-policy', action='store_true', default=False)
+    parser.add_argument('--num-simulations', type=int, default=None)
     args = parser.parse_args()
 
     output_path = pathlib.Path(args.output_path)
@@ -76,10 +78,12 @@ if __name__ == "__main__":
         output_path = output_path / f"{args.env}_policy_only"
     elif args.uniform_policy:
         output_path = output_path / f"{args.env}_no_policy"
+    elif args.num_simulations is not None:
+        output_path = output_path / f"{args.env}_{args.num_simulations}"
     else:
         output_path = output_path / args.env
 
     result = evaluate(
-        args.model, args.env, args.checkpoint_path, args.n_episodes, args.num_gpus, output_path, args.policy_only, args.uniform_policy
+        args.model, args.env, args.checkpoint_path, args.n_episodes, args.num_gpus, output_path, args.policy_only, args.uniform_policy, args.num_simulations
     )
     print(result)

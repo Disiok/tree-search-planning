@@ -413,6 +413,7 @@ class MuZero:
         output_path=None,
         policy_only=False,
         uniform_policy=False,
+        num_simulations=None,
     ):
         """
         Test the model in a dedicated thread.
@@ -449,7 +450,8 @@ class MuZero:
                     muzero_player,
                     save_gif=save_gif,
                     policy_only=policy_only,
-                    uniform_policy=uniform_policy
+                    uniform_policy=uniform_policy,
+                    num_simulations=num_simulations
                 )
             )
             self_play_worker.close_game()
