@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=16
+#SBATCH -J safe_roundabout                        # Job Name.
+#SBATCH --mem=40GB                          # Job Memory.
+#SBATCH -p t4v2 
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -o /h/sergio/exps/%J.out             # Where to save the output.
+#SBATCH --qos high                          # Up to 4 GPUs  with qos=high
+#SBATCH --mail-user=sergio@cs.toronto.edu
+#SBATCH --mail-type=ALL
+
+echo Running on $(hostname)
+source /h/sergio/.bashrc
+
+. /h/sergio/tree-search-planning/project.env
+
+conda activate tree-search-planning-1.7
+
+cd /h/sergio/tree-search-planning/muzero-general
+
+python -u muzero_interactive.py roundabout_env_ttc_flat_stochastic_concat
