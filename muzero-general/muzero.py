@@ -44,7 +44,6 @@ class MuZero:
     """
 
     def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False):
-        wandb.init(project='tree-search-planning', entity='disiok')
         # Load the game and the config from the module with the game name
         try:
             game_module = importlib.import_module("games." + game_name)
@@ -64,6 +63,7 @@ class MuZero:
             else:
                 self.config = config
 
+        wandb.init(project='tree-search-planning', entity='disiok', tags=[game_name])
         wandb.config.update(self.config)
 
         # Fix random generator seed
