@@ -3,7 +3,7 @@
     "import_module": "highway_env",
 	"road_length": 300,
 	"num_lanes": 2,
-	"actor_density": 0.4,
+	"actor_density": 0.6,
 	"actor_speed_mean": 25,
 	"actor_speed_std": 3,
 	"actor_spawn_sep": 20,
