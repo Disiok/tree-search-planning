@@ -1,3 +1,4 @@
+import numpy as np
 import copy
 import time
 
@@ -61,6 +62,26 @@ class Trainer:
                 copy.deepcopy(initial_checkpoint["optimizer_state"])
             )
 
+    def save_batch_stats(self, batch, shared_storage):
+        (
+            observation_batch,
+            action_batch,
+            target_value,
+            target_reward,
+            target_policy, # B x N x  5
+            weight_batch,
+            gradient_scale_batch,
+        ) = batch
+         
+        info = {}
+        visit0 = np.array(target_policy)[:,0]
+        info['avg_visit_dist'] = visit0.mean(0)
+        info['visit_dist_entropy'] = - (visit0 * np.log(visit0 + 1e-3)).sum(1).mean(0)
+        info['best_return'] = np.array(target_value).max()
+
+        shared_storage.set_info.remote(info)       
+
+
     def continuous_update_weights(self, replay_buffer, shared_storage):
         # Wait for the replay buffer to be filled
         while ray.get(shared_storage.get_info.remote("num_played_games")) < 1:
@@ -74,6 +95,7 @@ class Trainer:
             index_batch, batch = ray.get(next_batch)
             next_batch = replay_buffer.get_batch.remote()
             self.update_lr()
+            
             (
                 priorities,
                 total_loss,
@@ -81,8 +103,12 @@ class Trainer:
                 reward_loss,
                 terminal_loss,
                 policy_loss,
+<<<<<<< HEAD
                 reconstruction_loss
             ) = self.update_weights(batch)
+=======
+            ) = self.update_weights(batch, shared_storage)
+>>>>>>> james/cross_merge_env
 
             if self.config.PER:
                 # Save new priorities in the replay buffer (See https://arxiv.org/abs/1803.00933)
@@ -100,6 +126,9 @@ class Trainer:
                 )
                 if self.config.save_model:
                     shared_storage.save_checkpoint.remote()
+
+            self.save_batch_stats(batch, shared_storage)
+
             shared_storage.set_info.remote(
                 {
                     "training_step": self.training_step,
@@ -128,7 +157,7 @@ class Trainer:
                 ):
                     time.sleep(0.5)
 
-    def update_weights(self, batch):
+    def update_weights(self, batch, shared_storage=None):
         """
         Perform one training step.
         """
@@ -180,7 +209,17 @@ class Trainer:
         value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = self.model.initial_inference(
             observation_batch
         )
+<<<<<<< HEAD
         predictions = [(value, reward, terminal_logits, policy_logits, reconstruction)]
+=======
+
+        if shared_storage:
+            policy_conf = torch.softmax(policy_logits, -1)
+            policy_ent = (-policy_conf * torch.log(policy_conf + 1e-3)).sum(-1).mean().item()
+            shared_storage.set_info.remote({'policy_ent': policy_ent})
+
+        predictions = [(value, reward, policy_logits)]
+>>>>>>> james/cross_merge_env
         for i in range(1, action_batch.shape[1]):
             value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = (
                 self.model.recurrent_inference(hidden_state, action_batch[:, i])

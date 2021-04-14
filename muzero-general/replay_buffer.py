@@ -50,7 +50,7 @@ class ReplayBuffer:
 
                 game_history.priorities = numpy.array(priorities, dtype="float32")
                 game_history.game_priority = numpy.max(game_history.priorities)
-
+        
         self.buffer[self.num_played_games] = game_history
         self.num_played_games += 1
         self.num_played_steps += len(game_history.root_values)
