@@ -106,6 +106,7 @@ class Trainer:
                     "value_loss": value_loss,
                     "reward_loss": reward_loss,
                     "policy_loss": policy_loss,
+                    "kl_loss": kl_loss,
                 }
             )
 
