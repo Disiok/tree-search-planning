@@ -1,0 +1,25 @@
+{
+    "id": "roundabout-v0",
+    "import_module": "highway_env",
+    "other_vehicles_type": "highway_env.vehicle.behavior.LinearVehicle",
+    "observation": {
+        "type": "FlatTimeToCollisionWithEgoVelocity",
+        "horizon": 10,
+        "num_lanes": 3,
+        "num_speeds": 5
+    },
+    "action": {
+        "type": "DiscreteMetaAction"
+    },
+    "incoming_vehicle_destination": null,
+    "duration": 11,
+    "simulation_frequency": 15,
+    "policy_frequency": 1,
+    "screen_width": 600,
+    "screen_height": 600,
+    "centering_position": [0.5, 0.6],
+    "scaling": 5.5,
+    "show_trajectories": false,
+    "render_agent": true,
+    "offscreen_rendering": false
+}

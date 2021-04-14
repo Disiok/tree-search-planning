@@ -3,7 +3,7 @@
     "agents": [
         "configs/HighwayEnv/agents/MDPGapEAgent/baseline.json",
         "configs/HighwayEnv/agents/IntervalRobustPlannerAgent/opd.json",
-        "configs/HighwayEnv/agents/MCTSAgent/iterations10.json",
+        "configs/HighwayEnv/agents/MCTSAgent/budget_25.json",
         "configs/HighwayEnv/agents/MCTSWithPriorPolicyAgent/baseline.json"
     ]
 }

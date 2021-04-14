@@ -1,0 +1,6 @@
+{
+    "environments": ["configs/RoundaboutEnv/env_ttc_flat.json"],
+    "agents": [
+        "configs/HighwayEnv/agents/DQNAgent/dqn.json"
+    ]
+}
