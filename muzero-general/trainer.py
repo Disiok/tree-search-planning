@@ -103,12 +103,7 @@ class Trainer:
                 reward_loss,
                 terminal_loss,
                 policy_loss,
-<<<<<<< HEAD
-                reconstruction_loss
-            ) = self.update_weights(batch)
-=======
             ) = self.update_weights(batch, shared_storage)
->>>>>>> james/cross_merge_env
 
             if self.config.PER:
                 # Save new priorities in the replay buffer (See https://arxiv.org/abs/1803.00933)
@@ -209,17 +204,7 @@ class Trainer:
         value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = self.model.initial_inference(
             observation_batch
         )
-<<<<<<< HEAD
         predictions = [(value, reward, terminal_logits, policy_logits, reconstruction)]
-=======
-
-        if shared_storage:
-            policy_conf = torch.softmax(policy_logits, -1)
-            policy_ent = (-policy_conf * torch.log(policy_conf + 1e-3)).sum(-1).mean().item()
-            shared_storage.set_info.remote({'policy_ent': policy_ent})
-
-        predictions = [(value, reward, policy_logits)]
->>>>>>> james/cross_merge_env
         for i in range(1, action_batch.shape[1]):
             value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = (
                 self.model.recurrent_inference(hidden_state, action_batch[:, i])
