@@ -130,7 +130,7 @@ class MuZeroConfig:
             self.results_path = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 "../results", os.path.basename(__file__)[:-3],
-                f'{cfg["name"]}_day3' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+                f'{cfg["name"]}_safe' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
             )  # Path to store the model weights and TensorBoard logs
 
         self.cfg_file = cfg['cfg']
