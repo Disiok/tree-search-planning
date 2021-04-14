@@ -70,6 +70,8 @@ class Trainer:
             target_reward,
             target_policy, # B x N x  5
             weight_batch,
+            target_terminal,
+            target_reconstruction,
             gradient_scale_batch,
         ) = batch
          
@@ -103,6 +105,7 @@ class Trainer:
                 reward_loss,
                 terminal_loss,
                 policy_loss,
+                reconstruction_loss,
             ) = self.update_weights(batch, shared_storage)
 
             if self.config.PER:

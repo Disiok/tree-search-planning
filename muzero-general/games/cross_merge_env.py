@@ -48,8 +48,8 @@ one_aggro = {'dim': 183,
        'cfg': '1lane_aggro.json'
        }
 
-cfg = {}
 cfgs = {'one': one, 'two': two, 'one_dense': one_dense, 'one_sparse': one_sparse, 'one_aggro': one_aggro}
+cfg = cfgs["one"]
 
 
 class MuZeroConfig:
@@ -126,13 +126,13 @@ class MuZeroConfig:
             self.results_path = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 "../results", os.path.basename(__file__)[:-3],
-                f'{cfg["exp_name"]}'
+                datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
             )  # Path to store the model weights and TensorBoard logs
         else:
             self.results_path = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 "../results", os.path.basename(__file__)[:-3],
-                f'{cfg["name"]}_day3' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+                datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
             )  # Path to store the model weights and TensorBoard logs
 
         self.cfg_file = cfg['cfg']
