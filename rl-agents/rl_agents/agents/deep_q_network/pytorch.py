@@ -81,7 +81,8 @@ class DQNAgent(AbstractDQNAgent):
 
     def save(self, filename):
         state = {'state_dict': self.value_net.state_dict(),
-                 'optimizer': self.optimizer.state_dict()}
+                 'optimizer': self.optimizer.state_dict(),
+                 'time': self.exploration_policy.time}
         torch.save(state, filename)
         return filename
 
@@ -90,6 +91,7 @@ class DQNAgent(AbstractDQNAgent):
         self.value_net.load_state_dict(checkpoint['state_dict'])
         self.target_net.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.exploration_policy.set_time(checkpoint['time'])
         return filename
 
     def initialize_model(self):

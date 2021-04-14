@@ -50,7 +50,6 @@ class SelfPlay:
                     "self",
                     0,
                 )
-
                 replay_buffer.save_game.remote(game_history, shared_storage)
 
             else:
@@ -191,7 +190,7 @@ class SelfPlay:
                     )
 
                 observation, reward, done = self.game.step(action)
-
+        
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
                     self.game.render()

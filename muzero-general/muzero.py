@@ -21,6 +21,8 @@ import self_play_local
 import shared_storage
 import trainer
 
+import wandb
+
 
 class MuZero:
     """
@@ -229,7 +231,7 @@ class MuZero:
                 self.logging_loop(
                     num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
                 )
-    
+
     @ray.remote
     def remote_logging_loop(self, num_gpus):
         self.logging_loop(num_gpus)
@@ -295,6 +297,8 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
+                log_to_wandb(info)
+
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
@@ -347,7 +351,7 @@ class MuZero:
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Value Loss: {info["value_loss"]:.2f}. Reward Loss: {info["reward_loss"]:.2f}')
                 counter += 1
 
-                if counter % 1000 == 0 and self.config.save_model:
+                if counter % 100 == 0 and self.config.save_model:
                     # Persist replay buffer to disk
                     print("\n\nPersisting replay buffer games to disk...")
                     pickle.dump(
@@ -361,7 +365,7 @@ class MuZero:
                         open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
                     )
                 time.sleep(5.0)
-                
+
         except KeyboardInterrupt:
             pass
 
@@ -380,6 +384,7 @@ class MuZero:
                 },
                 open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
             )
+            print(os.path.join(self.config.results_path, "replay_buffer.pkl"))
 
     def terminate_workers(self):
         """
@@ -431,9 +436,9 @@ class MuZero:
             num_tests (int): Number of games to average. Defaults to 1.
 
             num_gpus (int): Number of GPUs to use, 0 forces to use the CPU. Defaults to 0.
-        
+
         Returns:
-            
+
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
@@ -469,7 +474,7 @@ class MuZero:
                     for history in results
                 ]
             )
-        
+
         mean_episode_length = numpy.mean([len(history.action_history) - 1 for history in results])
 
         result = {
@@ -560,3 +565,12 @@ class CPUActor:
         weigths = model.get_weights()
         summary = str(model).replace("\n", " \n\n")
         return weigths, summary
+
+
+def log_to_wandb(measurements, prefix=""):
+    logs = {}
+    for k, v in measurements.items():
+	key = f"{prefix}_{k}" if prefix else k
+	if v:
+	    logs[key] = v[-1]
+    wandb.log(logs)
