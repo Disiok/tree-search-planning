@@ -95,7 +95,7 @@ class SelfPlay:
                     if render:
                         print(f'Tree depth: {mcts_info["max_tree_depth"]}')
                         print(
-                            f"Root value for player {self.game.to_play()}: {root.value():.2f}"
+                            f"Root value for player {self.game.to_play()}: {root.value:.2f}"
                         )
                 else:
                     action, root = self.select_opponent_action(
@@ -140,7 +140,7 @@ class SelfPlay:
                 True,
             )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
-            print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
+            print(f"Root value for player {self.game.to_play()}: {root.value:.2f}")
             print(
                 f"Player {self.game.to_play()} turn. MuZero suggests {self.game.action_to_string(self.select_action(root, 0))}"
             )

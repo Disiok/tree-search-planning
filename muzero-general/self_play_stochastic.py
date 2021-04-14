@@ -408,7 +408,6 @@ class MCTS:
 
         for node in reversed(search_path[:-1]):
             node.visit_count += 1
-            node.update_value()
 
             if isinstance(node, TransitionNode):
                 node.update_value(self.config.discount)
