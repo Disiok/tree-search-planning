@@ -328,6 +328,7 @@ class MCTS:
         max_tree_depth = 0
         num_sims = 0
         while num_sims < self.config.num_simulations:
+            assert num_sims == sum([child.visit_count for child in root.children])
             virtual_to_play = to_play
             node = root
             search_path = [node]
@@ -343,7 +344,7 @@ class MCTS:
                     virtual_to_play = self.config.players[virtual_to_play + 1]
                 else:
                     virtual_to_play = self.config.players[0]
-
+            assert node.visit_count == 0
             parent = search_path[-2]
             if isinstance(node, StateNode):
                 # in other words, the parent is a TransitionNode
@@ -498,11 +499,7 @@ class StateNode(Node):
 
         if child.visit_count > 0:
             # Mean value Q
-            value_score = min_max_stats.normalize(
-                child.reward
-                + config.discount
-                * (child.value() if len(config.players) == 1 else -child.value())
-            )
+            value_score = min_max_stats.normalize(child.value())
         else:
             value_score = 0
 
