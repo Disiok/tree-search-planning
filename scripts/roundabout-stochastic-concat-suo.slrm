@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=40GB                          # Job Memory.
 #SBATCH -p gpu                             # Cluster
-#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH --gres=gpu:2                       # Number of GPUs.
 #SBATCH -J muzero_stochastic               # Job Name.
 #SBATCH -o /h/suo/experiments/muzero/%J.out
 #SBATCH --mail-user=suo@cs.toronto.edu
