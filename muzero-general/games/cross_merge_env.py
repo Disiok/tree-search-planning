@@ -222,12 +222,14 @@ class Game(AbstractGame):
 
     ENV_NAME = 'cross-merge-v0'
 
-    def __init__(self, cfg_file='', seed=None, monitor_path=None):
+    def __init__(self, cfg_file='', seed=None, monitor_path=None, **kwargs):
         # self.env = gym.make(self.ENV_NAME)
         this_dir = os.path.dirname(os.path.abspath(__file__))
         print(f"Using config {cfg_file}")
         self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', cfg_file))
-        
+        if 'density' in kwargs:
+            self.env.config['actor_density'] = kwargs['density']
+
         if monitor_path is not None:
             self.env = MonitorV2(self.env, monitor_path, video_callable=False)
         
@@ -236,6 +238,8 @@ class Game(AbstractGame):
             self.env.seed(seed)
 
         self.gif_imgs = []
+        self.infos = []
+        self.all_infos = []
 
     def step(self, action):
         """
@@ -247,7 +251,10 @@ class Game(AbstractGame):
         Returns:
             The new observation, the reward and a boolean if the game has ended.
         """
-        observation, reward, done, _ = self.env.step(action)
+        observation, reward, done, info = self.env.step(action)
+        self.infos.append(info)
+        if done:
+            self.all_infos.append(self.infos)
         return observation, reward, done
 
     def legal_actions(self):
@@ -270,6 +277,7 @@ class Game(AbstractGame):
         Returns:
             Initial observation of the game.
         """
+        self.infos = []
         return self.env.reset()
 
     def close(self):

@@ -43,8 +43,9 @@ class MuZero:
         >>> muzero.test(render=True)
     """
 
-    def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False, exp_name=None, env_cfg_key=None):
+    def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False, exp_name=None, env_cfg_key=None, **kwargs):
         # Load the game and the config from the module with the game name
+        self.kwargs = kwargs
         try:
             game_module = importlib.import_module("games." + game_name)
             self.Game = game_module.Game
@@ -53,6 +54,11 @@ class MuZero:
                 if exp_name:
                     game_module.cfg['exp_name'] = exp_name
             self.config = game_module.MuZeroConfig()
+            for attr in dir(self.config):
+                if attr in kwargs:
+                    print("Overwriting config." + attr)
+                    setattr(self.config, attr, kwargs[attr])
+        
         except ModuleNotFoundError as err:
             print(
                 f'{game_name} is not a supported game name, try "cartpole" or refer to the documentation for adding a new game.'
@@ -452,7 +458,7 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), **self.kwargs)
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")
@@ -479,7 +485,8 @@ class MuZero:
 
         result = {
             'mean_total_reward': mean_total_reward,
-            'mean_episode_length': mean_episode_length
+            'mean_episode_length': mean_episode_length,
+            'episode_infos': self_play_worker.game.all_infos
         }
 
         return result

@@ -19,7 +19,7 @@ class SelfPlay:
     OUTPUT_FOLDER = 'out'
     RUN_FOLDER = 'run_{}_{}'
 
-    def __init__(self, initial_checkpoint, Game, config, seed, directory=None, run_directory=None):
+    def __init__(self, initial_checkpoint, Game, config, seed, directory=None, run_directory=None, **kwargs):
         self.game_cls = Game
 
         # monitoring
@@ -27,7 +27,8 @@ class SelfPlay:
         self.run_directory = self.directory / (run_directory or self.default_run_directory)
 
         self.config = config
-        self.game = Game(seed, monitor_path=self.run_directory)
+        # self.game = Game(seed=seed, cfg_file=config.cfg_file)
+        self.game = Game(seed=seed, monitor_path=self.run_directory, cfg_file=config.cfg_file, **kwargs)
 
         # Fix random generator seed
         numpy.random.seed(seed)
