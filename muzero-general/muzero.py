@@ -18,9 +18,14 @@ import diagnose_model
 import models
 import replay_buffer
 import self_play
+import self_play_risk_sensitive
+import self_play_local_risk_sensitive
 import self_play_local
+import self_play_stochastic
+import self_play_local_stochastic
 import shared_storage
 import trainer
+import wandb
 
 
 class MuZero:
@@ -64,6 +69,9 @@ class MuZero:
                     setattr(self.config, param, value)
             else:
                 self.config = config
+
+        wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
+        wandb.config.update(self.config)
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -130,6 +138,7 @@ class MuZero:
             "terminal_loss": 0,
             "policy_loss": 0,
             "reconstruction_loss": 0,
+            "kl_loss": 0,
             "num_played_games": 0,
             "num_played_steps": 0,
             "n_env_interactions": 0,
@@ -215,15 +224,37 @@ class MuZero:
             ).remote(self.checkpoint, self.config)
 
         print('Initializing self-play workers')
-        self.self_play_workers = [
-            self_play.SelfPlay.options(
-                num_cpus=0,
-                num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
-            ).remote(
-                self.checkpoint, self.Game, self.config, self.config.seed + seed 
-            )
-            for seed in range(self.config.num_workers)
-        ]
+
+        if hasattr(self.config, 'risk_sensitive') and self.config.risk_sensitive:
+            self.self_play_workers = [
+                self_play_risk_sensitive.SelfPlay.options(
+                    num_cpus=0,
+                    num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                ).remote(
+                    self.checkpoint, self.Game, self.config, self.config.seed + seed,
+                )
+                for seed in range(self.config.num_workers)
+            ]
+        elif hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
+            self.self_play_workers = [
+                self_play_stochastic.SelfPlay.options(
+                    num_cpus=0,
+                    num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                ).remote(
+                    self.checkpoint, self.Game, self.config, self.config.seed + seed,
+                )
+                for seed in range(self.config.num_workers)
+            ]
+        else:
+            self.self_play_workers = [
+                self_play.SelfPlay.options(
+                    num_cpus=0,
+                    num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+                ).remote(
+                    self.checkpoint, self.Game, self.config, self.config.seed + seed,
+                )
+                for seed in range(self.config.num_workers)
+            ]
 
         # Launch workers
         # NOTE(sergio): why is a list comprehension used here?
@@ -245,7 +276,7 @@ class MuZero:
         if log_in_tensorboard:
             print('Initializing tensorboard logging')
             if self.remote_logging:
-                self.logging_loop.remote(
+                self.remote_logging_loop.remote(
                     self, num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
                 )
             else:
@@ -262,14 +293,33 @@ class MuZero:
         Keep track of the training performance.
         """
         # Launch the test worker to get performance metrics
-        self.test_worker = self_play.SelfPlay.options(
-            num_cpus=0, num_gpus=num_gpus,
-        ).remote(
-            self.checkpoint,
-            self.Game,
-            self.config,
-            self.config.seed + self.config.num_workers,
-        )
+        if hasattr(self.config, 'risk_sensitive') and self.config.risk_sensitive:
+            self.test_worker = self_play_risk_sensitive.SelfPlay.options(
+                num_cpus=0, num_gpus=num_gpus,
+            ).remote(
+                self.checkpoint,
+                self.Game,
+                self.config,
+                self.config.seed + self.config.num_workers,
+            )
+        elif hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
+            self.test_worker = self_play_stochastic.SelfPlay.options(
+                num_cpus=0, num_gpus=num_gpus,
+            ).remote(
+                self.checkpoint,
+                self.Game,
+                self.config,
+                self.config.seed + self.config.num_workers,
+            )
+        else:
+            self.test_worker = self_play.SelfPlay.options(
+                num_cpus=0, num_gpus=num_gpus,
+            ).remote(
+                self.checkpoint,
+                self.Game,
+                self.config,
+                self.config.seed + self.config.num_workers,
+            )
         self.test_worker.continuous_self_play.remote(
             self.shared_storage_worker, None, True
         )
@@ -309,6 +359,7 @@ class MuZero:
             "terminal_loss",
             "policy_loss",
             "reconstruction_loss",
+            "kl_loss",
             "num_played_games",
             "num_played_steps",
             "n_env_interactions",
@@ -322,6 +373,7 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
+                wandb.log(info)
                 writer.add_scalar(
                     "0.visit_dist_entropy", info["visit_dist_entropy"], counter
                 )
@@ -374,6 +426,7 @@ class MuZero:
                 writer.add_scalar("3.Loss/Terminal_loss", info["terminal_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
                 writer.add_scalar("3.Loss/Reconstruction_loss", info["reconstruction_loss"], counter)
+                writer.add_scalar("3.Loss/KL_loss", info["kl_loss"], counter)
                 print(
                     f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Value Loss: {info["value_loss"]:.2f}. Reward Loss: {info["reward_loss"]:.2f}')
                 counter += 1
@@ -470,6 +523,12 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
+        if hasattr(self.config, 'risk_sensitive') and self.config.risk_sensitive:
+            self_play_worker = self_play_local_risk_sensitive.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        elif hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
+            self_play_worker = self_play_local_stochastic.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
+        else:
+            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")

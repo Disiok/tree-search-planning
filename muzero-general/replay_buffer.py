@@ -92,11 +92,21 @@ class ReplayBuffer:
             )
 
             index_batch.append([game_id, game_pos])
-            observation_batch.append(
-                game_history.get_stacked_observations(
+            is_stochastic_dynamics = getattr(self.config, 'stochastic_dynamics', False)
+
+            if is_stochastic_dynamics:
+                # to train stochastic dynamics model, we need full sequence of observations starting from the 
+                # desired game state (i.e. include all future states)
+                observation = self.get_observation_with_future(
+                    game_history, game_pos
+                )
+            else:
+                # this is the original function that gets the observation only at the desired game state
+                # (and some past states)
+                observation = game_history.get_stacked_observations(
                     game_pos, self.config.stacked_observations
                 )
-            )
+            observation_batch.append(observation)
             action_batch.append(actions)
             value_batch.append(values)
             reward_batch.append(rewards)
@@ -143,6 +153,29 @@ class ReplayBuffer:
                 gradient_scale_batch,
             ),
         )
+
+    def get_observation_with_future(self, game_history, state_index):
+        observations = []
+        for current_index in range(
+            state_index, state_index + self.config.num_unroll_steps + 1
+        ):
+
+            if current_index < len(game_history.root_values):
+                observation = game_history.get_stacked_observations(
+                    state_index, self.config.stacked_observations
+                )
+            # TODO: is the last state different?
+            # elif current_index == len(game_history.root_values):
+            else:
+                # There's no observation for states past the end of games 
+                # Since they are treated as absorbing states, we can just return all zero observation
+                observation = numpy.full_like(observations[0], numpy.nan)
+
+            observations.append(observation)
+        
+        observations = numpy.stack(observations, axis=0)  # [T, observation_dim]
+
+        return observations
 
     def sample_game(self, force_uniform=False):
         """

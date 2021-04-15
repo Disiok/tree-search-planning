@@ -4,6 +4,7 @@ muzero-general/results
 muzero-general/old_results
 muzero-general/debug
 muzero-general/out
+muzero-general/wandb
 tensorboards/
 scp_tensorboard.sh
 .DS_Store

@@ -6,3 +6,4 @@ ray
 seaborn
 nevergrad
 imageio
+wandb
