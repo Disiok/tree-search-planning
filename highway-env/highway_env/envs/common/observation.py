@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from highway_env import utils
-from highway_env.envs.common.finite_mdp import compute_ttc_grid
+from highway_env.envs.common.finite_mdp import compute_ttc_grid, compute_ttg_grid
 from highway_env.road.lane import AbstractLane
 from highway_env.utils import distance_to_circle
 from highway_env.vehicle.controller import MDPVehicle
@@ -89,11 +89,14 @@ class GrayscaleObservation(ObservationType):
 
 
 class TimeToCollisionObservation(ObservationType):
-    def __init__(self, env: 'AbstractEnv', horizon: int = 10, num_lanes=3, num_speeds=3, **kwargs: dict) -> None:
+    def __init__(self, env: 'AbstractEnv', horizon: int = 10, num_lanes=3, num_speeds=3, 
+                 project_speed=True, fixed_velocity_grid=False, **kwargs: dict) -> None:
         super().__init__(env)
         self.horizon = horizon
         self.num_lanes = num_lanes
         self.num_speeds = num_speeds
+        self.project_speed = project_speed
+        self.fixed_velocity_grid = fixed_velocity_grid
 
     def space(self) -> spaces.Space:
         try:
@@ -105,19 +108,21 @@ class TimeToCollisionObservation(ObservationType):
         if not self.env.road:
             return np.zeros((self.num_speeds, self.num_lanes, int(self.horizon * self.env.config["policy_frequency"])))
         grid = compute_ttc_grid(self.env, vehicle=self.observer_vehicle,
-                                time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon)
-        padding = np.ones(np.shape(grid))
+                                time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon, project_speed=self.project_speed)
+        padding = np.ones((self.num_speeds, self.num_lanes, int(self.horizon * self.env.config["policy_frequency"])))
         padded_grid = np.concatenate([padding, grid, padding], axis=1)
         obs_lanes = self.num_lanes
-        l0 = grid.shape[1] + self.observer_vehicle.lane_index[2] - obs_lanes // 2
-        lf = grid.shape[1] + self.observer_vehicle.lane_index[2] + obs_lanes // 2
+        l0 = padding.shape[1] + self.observer_vehicle.lane_index[2] - obs_lanes // 2
+        lf = padding.shape[1] + self.observer_vehicle.lane_index[2] + obs_lanes // 2
         clamped_grid = padded_grid[:, l0:lf+1, :]
+        if self.fixed_velocity_grid:
+            return clamped_grid
         repeats = np.ones(clamped_grid.shape[0])
         repeats[np.array([0, -1])] += clamped_grid.shape[0]
         padded_grid = np.repeat(clamped_grid, repeats.astype(int), axis=0)
         obs_speeds = self.num_speeds
-        v0 = grid.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
-        vf = grid.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
+        v0 = padding.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
+        vf = padding.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
         clamped_grid = padded_grid[v0:vf + 1, :, :]
         return clamped_grid
 
@@ -133,21 +138,55 @@ class FlatTimeToCollisionWithEgoVelocityObservation(TimeToCollisionObservation):
         # Get spatial grid from TimeToCollisionObservation
         spatial_grid = super().observe()
 
-        # Flatten grid
-        flat_repr = spatial_grid.reshape(-1)
+        if self.fixed_velocity_grid:
+            # Flatten grid
+            flat_repr = spatial_grid.reshape(-1)
+
+            # Add relative velocity with the ones in the grid
+            # Absolute velocity is not needed since there is always a velocity in the grid that is ego.SPEED_MIN
+            ego_speeds = []
+            for speed_index in range(spatial_grid.shape[0]):
+                ego_eval_speed = ego.index_to_speed(speed_index)
+                rel_speed_norm = (ego.speed - ego_eval_speed) / (ego.SPEED_MAX - ego.SPEED_MIN)
+                ego_speeds.append(rel_speed_norm)
+
+            flat_repr = np.concatenate([flat_repr, np.array(ego_speeds)])
+
+            return flat_repr.reshape(1, 1, -1)
+        
+        return spatial_grid.reshape(1, 1, -1)
 
 
-        # Add relative velocity with the ones in the grid
-        # Absolute velocity is not needed since there is always a velocity in the grid that is ego.SPEED_MIN
-        ego_speeds = []
-        for speed_index in range(spatial_grid.shape[0]):
-            ego_eval_speed = ego.index_to_speed(speed_index)
-            rel_speed_norm = (ego.speed - ego_eval_speed) / (ego.SPEED_MAX - ego.SPEED_MIN)
-            ego_speeds.append(rel_speed_norm)
+class TTCGWithVelocityObservation(FlatTimeToCollisionWithEgoVelocityObservation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_lanes = 4 * self.env.config['num_lanes'] - 1
 
-        flat_repr = np.concatenate([flat_repr, np.array(ego_speeds)])
+    def observe(self) -> np.ndarray:
+        ttc_grid = super().observe()
+        ttg_grid = compute_ttg_grid(self.env, vehicle=self.observer_vehicle,
+                                        time_quantization=1/self.env.config["policy_frequency"], horizon=self.horizon, project_speed=self.project_speed)
 
-        return flat_repr.reshape(1, 1, -1)
+        #ttg_grid = ttg_grid.reshape(1, 1, -1)
+        padding = np.zeros((self.num_speeds, self.num_lanes, int(self.horizon * self.env.config["policy_frequency"]))) # zero pad for ttg
+        padded_grid = np.concatenate([padding, ttg_grid, padding], axis=1)
+        obs_lanes = self.num_lanes
+        l0 = padding.shape[1] + self.observer_vehicle.lane_index[2] - obs_lanes // 2
+        lf = padding.shape[1] + self.observer_vehicle.lane_index[2] + obs_lanes // 2
+        clamped_grid = padded_grid[:, l0:lf+1, :]
+        
+        if not self.fixed_velocity_grid:
+            repeats = np.ones(clamped_grid.shape[0])
+            repeats[np.array([0, -1])] += clamped_grid.shape[0]
+            padded_grid = np.repeat(clamped_grid, repeats.astype(int), axis=0)
+            obs_speeds = self.num_speeds
+            v0 = padding.shape[0] + self.observer_vehicle.speed_index - obs_speeds // 2
+            vf = padding.shape[0] + self.observer_vehicle.speed_index + obs_speeds // 2
+            clamped_grid = padded_grid[v0:vf + 1, :, :]
+        
+        ttcg = np.concatenate((ttc_grid, clamped_grid.reshape(1, 1, -1)), axis=-1)
+
+        return ttcg
 
 
 class KinematicObservation(ObservationType):
@@ -524,6 +563,8 @@ def observation_factory(env: 'AbstractEnv', config: dict) -> ObservationType:
         return TimeToCollisionObservation(env, **config)
     elif config["type"] == "FlatTimeToCollisionWithEgoVelocity":
         return FlatTimeToCollisionWithEgoVelocityObservation(env, **config)
+    elif config["type"] == "TTCGWithVelocity":
+        return TTCGWithVelocityObservation(env, **config)
     elif config["type"] == "Kinematics":
         return KinematicObservation(env, **config)
     elif config["type"] == "OccupancyGrid":

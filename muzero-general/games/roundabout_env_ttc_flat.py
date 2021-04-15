@@ -9,11 +9,13 @@ import imageio
 import highway_env
 
 from .abstract_game import AbstractGame
+from rl_agents.trainer.monitor import MonitorV2
 
 NUM_LANES = 3
 NUM_SPEEDS = 5
 HORIZON = 10
-
+PROJECT_SPEED = False
+FIXED_VELOCITY_GRID = True
 
 class MuZeroConfig:
     def __init__(self):
@@ -84,8 +86,7 @@ class MuZeroConfig:
         self.results_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../results", os.path.basename(__file__)[:-3],
-            'first_try', 
-            'rewardx5_repro_t4v2' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
+            'fix1' + datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")
         )  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = 300000  # Total number of training steps (ie weights update according to a batch)
@@ -146,8 +147,12 @@ class Game(AbstractGame):
     Game wrapper.
     """
 
-    def __init__(self, seed=None):
-        self.env = gym.make('roundabout-v0')
+    ENV_NAME = 'roundabout-v0'
+    
+    def __init__(self, seed=None, monitor_path=None):
+        self.env = gym.make(self.ENV_NAME)
+        if monitor_path is not None:
+            self.env = MonitorV2(self.env, monitor_path, video_callable=False)
         self.env.configure(
             {
                 'observation': {
@@ -155,6 +160,8 @@ class Game(AbstractGame):
                     'horizon': HORIZON,
                     'num_lanes': NUM_LANES,
                     'num_speeds': NUM_SPEEDS,
+                    'project_speed': PROJECT_SPEED,
+                    'fixed_velocity_grid': FIXED_VELOCITY_GRID,
                 },
                 "action": {
                     "type": "DiscreteMetaAction"
