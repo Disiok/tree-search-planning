@@ -296,7 +296,9 @@ class MCTS:
             (
                 root_predicted_value,
                 reward,
+                _,
                 policy_logits,
+                _,
                 hidden_state,
             ) = model.initial_inference(observation)
             root_predicted_value = models.support_to_scalar(
@@ -570,6 +572,7 @@ class GameHistory:
         # For PER
         self.priorities = None
         self.game_priority = None
+        self.n_env_interactions_history = []
 
     def store_search_statistics(self, root, action_space):
         # Turn visit count from root into a policy

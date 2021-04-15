@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 import torch
 from torch import nn
+
 from torch.distributions import OneHotCategoricalStraightThrough
 
 
@@ -322,6 +323,7 @@ class MuZeroStochastic(MuZeroFullyConnectedNetwork):
             fc_policy_layers,
             fc_representation_layers,
             fc_dynamics_layers,
+            fc_dynamics_layers,  # dummy reconstruction layers
             support_size,
         )
         # TODO: might be clearer to name these transitions instead of futures
@@ -488,6 +490,7 @@ class MuZeroStochasticConcat(MuZeroFullyConnectedNetwork):
             fc_policy_layers,
             fc_representation_layers,
             fc_dynamics_layers,
+            fc_dynamics_layers,  # dummy reconstruction layers
             support_size,
         )
         # TODO: might be clearer to name these transitions instead of futures

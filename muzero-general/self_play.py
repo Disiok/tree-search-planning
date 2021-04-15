@@ -18,7 +18,11 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed):
         self.config = config
-        self.game = Game(seed=seed,cfg_file=config.cfg_file)
+
+        if hasattr(config, "cfg_file"):
+            self.game = Game(seed=seed, cfg_file=config.cfg_file)
+        else:
+            self.game = Game(seed=seed)
 
         # Fix random generator seed
         numpy.random.seed(seed)

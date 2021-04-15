@@ -28,6 +28,9 @@ import trainer
 import wandb
 
 
+WANDB_INIT = os.environ.get("WANDB_USERNAME", None) is not None
+
+
 class MuZero:
     """
     Main class to manage MuZero.
@@ -70,8 +73,9 @@ class MuZero:
             else:
                 self.config = config
 
-        wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
-        wandb.config.update(self.config)
+        if WANDB_INIT:
+            wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
+            wandb.config.update(self.config)
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -373,7 +377,8 @@ class MuZero:
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-                wandb.log(info)
+                if WANDB_INIT:
+                    wandb.log(info)
                 writer.add_scalar(
                     "0.visit_dist_entropy", info["visit_dist_entropy"], counter
                 )
@@ -652,13 +657,3 @@ class CPUActor:
         weigths = model.get_weights()
         summary = str(model).replace("\n", " \n\n")
         return weigths, summary
-
-
-# def log_to_wandb(measurements, prefix=""):
-#     logs = {}
-#     for k, v in measurements.items():
-# 	key = f"{prefix}_{k}" if prefix else k
-# 	if v:
-# 	    logs[key] = v[-1]
-#     wandb.log(logs)
-# 

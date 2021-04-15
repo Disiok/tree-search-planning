@@ -218,12 +218,12 @@ class Trainer:
 
         if self.is_stochastic_model:
             ## Generate predictions
-            value, reward, policy_logits, hidden_state = self.model.initial_inference(
+            value, reward, _, policy_logits, _, hidden_state = self.model.initial_inference(
                 observation_batch[:, 0]
             )
 
             hidden_states_from_observation = [hidden_state]
-            predictions = [(value, reward, policy_logits)]
+            predictions = [(value, reward, None, policy_logits, None)]
             # NOTE: this is just to make the indexing work out
             transition_logits = [None]  
 
@@ -254,7 +254,7 @@ class Trainer:
                 )
                 # Scale the gradient at the start of the dynamics function (See paper appendix Training)
                 hidden_state.register_hook(lambda grad: grad * 0.5)
-                predictions.append((value, reward, policy_logits))
+                predictions.append((value, reward, None, policy_logits, None))
                 transition_logits.append((transition_logits_post, transition_logits_prior))
         else:
             ## Generate predictions
@@ -275,13 +275,7 @@ class Trainer:
         ## Compute losses
         kl_loss = 0.
         value_loss, reward_loss, terminal_loss, policy_loss, reconstruction_loss = (0, 0, 0, 0, 0)
-
-        if len(predictions) == 3:
-            value, reward, policy_logits = predictions[0]
-            reconstruction = None
-            terminal_logits = None
-        else:
-            value, reward, terminal_logits, policy_logits, reconstruction = predictions[0]
+        value, reward, terminal_logits, policy_logits, reconstruction = predictions[0]
 
         # Ignore reward loss for the first batch step
         current_value_loss, _, _, current_policy_loss, current_reconstruction_loss = self.loss_function(
@@ -314,12 +308,7 @@ class Trainer:
         )
 
         for i in range(1, len(predictions)):
-            if len(predictions) == 3:
-                reconstruction, terminal_logits = None, None
-                value, reward, policy_logits = predictions[i]
-            else:
-                value, reward, terminal_logits, policy_logits, reconstruction = predictions[i]
-
+            value, reward, terminal_logits, policy_logits, reconstruction = predictions[i]
             (
                 current_value_loss,
                 current_reward_loss,
@@ -404,9 +393,9 @@ class Trainer:
         loss = (
             value_loss * self.config.value_loss_weight
             + reward_loss * self.config.reward_loss_weight
-            + terminal_loss * self.config.terminal_loss_weight
-            + policy_loss * self.config.policy_loss_weight
-            + reconstruction_loss * self.config.reconstruction_loss_weight
+            + terminal_loss * getattr(self.config, "terminal_loss_weight", 0.)
+            + policy_loss * getattr(self.config, "policy_loss_weight", 1.)
+            + reconstruction_loss * getattr(self.config, "reconstruction_loss_weight", 0.)
         )
         if self.config.PER:
             # Correct PER bias by using importance-sampling (IS) weights
