@@ -1,7 +1,6 @@
 {
     "environments": ["configs/RoundaboutEnv/env_ttc_flat.json"],
     "agents": [
-        "configs/HighwayEnv/agents/MDPGapEAgent/baseline.json",
         "configs/HighwayEnv/agents/IntervalRobustPlannerAgent/opd.json"
     ]
 }

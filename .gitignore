@@ -2,6 +2,8 @@
 *.log
 muzero-general/results
 tensorboards/
+muzero-general/wandb/
+out/
 scp_tensorboard.sh
 .DS_Store
 gifs

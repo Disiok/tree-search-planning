@@ -42,6 +42,7 @@ class RoundaboutEnv(AbstractEnv):
         reward = self.COLLISION_REWARD * self.vehicle.crashed \
                  + self.HIGH_SPEED_REWARD * MDPVehicle.get_speed_index(self.vehicle) / max(MDPVehicle.SPEED_COUNT - 1, 1) \
                  + self.LANE_CHANGE_REWARD * lane_change
+                
         return utils.lmap(reward, [self.COLLISION_REWARD + self.LANE_CHANGE_REWARD, self.HIGH_SPEED_REWARD], [0, 1])
 
     def _is_terminal(self) -> bool:

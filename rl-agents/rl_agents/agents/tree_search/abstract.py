@@ -158,6 +158,9 @@ class AbstractPlanner(Configurable):
 
     def step(self, state, action):
         observation, reward, done, info = state.step(action)
+        # NOTE(suo): Hack for fixing reward normalization for roundabout env
+        #            We don't want to properly fix the environment since it will change the metric
+        reward *= 0.5
         self.observations.append(observation)
         return observation, reward, done, info
 
