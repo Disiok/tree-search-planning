@@ -210,7 +210,7 @@ class Game(AbstractGame):
 
     ENV_NAME = 'cross-merge-v0'
 
-    def __init__(self, seed=None, cfg_file='', monitor_path=None):
+    def __init__(self, seed=None, cfg_file='1lane.json', monitor_path=None):
         # self.env = gym.make(self.ENV_NAME)
         this_dir = os.path.dirname(os.path.abspath(__file__))
         print(f"Using config {cfg_file}")
