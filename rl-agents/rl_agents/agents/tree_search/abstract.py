@@ -158,15 +158,6 @@ class AbstractPlanner(Configurable):
 
     def step(self, state, action):
         observation, reward, done, info = state.step(action)
-        # NOTE(suo): Hack for fixing reward normalization for roundabout env
-        #            We don't want to properly fix the environment since it will change the metric
-        # TODO(suo): Fix this
-        # reward *= 0.5
-        # NOTE(suo): Hack for fixing reward normalization for cross merge en
-        #            min is collision, max is reaching goal
-        # TODO(suo): Fix this
-        from highway_env import utils
-        reward = utils.lmap(reward, [-3, 1], [0, 1])
         self.observations.append(observation)
         return observation, reward, done, info
 

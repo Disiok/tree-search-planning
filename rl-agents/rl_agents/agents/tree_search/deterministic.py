@@ -113,6 +113,19 @@ class OptimisticDeterministicPlanner(AbstractPlanner):
         leaf_to_expand.expand()
         leaf_to_expand.backup_to_root()
 
+    def step(self, state, action):
+        observation, reward, done, info = super().step(state, action)
+        # NOTE(suo): Hack for fixing reward normalization for roundabout env
+        #            We don't want to properly fix the environment since it will change the metric
+        # TODO(suo): Fix this
+        # reward *= 0.5
+        # NOTE(suo): Hack for fixing reward normalization for cross merge en
+        #            min is collision, max is reaching goal
+        # TODO(suo): Fix this
+        from highway_env import utils
+        reward = utils.lmap(reward, [-3, 1], [0, 1])
+        return observation, reward, done, info
+
     def plan(self, state, observation):
         self.root.state = state
         for epoch in np.arange(self.config["budget"] // state.action_space.n):
