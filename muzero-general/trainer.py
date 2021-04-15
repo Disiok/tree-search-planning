@@ -1,3 +1,4 @@
+import numpy as np
 import copy
 import time
 
@@ -31,6 +32,9 @@ class Trainer:
         self.model.to(torch.device("cuda" if self.config.train_on_gpu else "cpu"))
         self.model.train()
 
+        if hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics:
+            self.model.freeze_dynamics()
+
         self.training_step = initial_checkpoint["training_step"]
 
         if "cuda" not in str(next(self.model.parameters()).device):
@@ -61,6 +65,28 @@ class Trainer:
                 copy.deepcopy(initial_checkpoint["optimizer_state"])
             )
 
+    def save_batch_stats(self, batch, shared_storage):
+        (
+            observation_batch,
+            action_batch,
+            target_value,
+            target_reward,
+            target_policy, # B x N x  5
+            weight_batch,
+            target_terminal,
+            target_reconstruction,
+            gradient_scale_batch,
+        ) = batch
+         
+        info = {}
+        visit0 = np.array(target_policy)[:,0]
+        info['avg_visit_dist'] = visit0.mean(0)
+        info['visit_dist_entropy'] = - (visit0 * np.log(visit0 + 1e-3)).sum(1).mean(0)
+        info['best_return'] = np.array(target_value).max()
+
+        shared_storage.set_info.remote(info)       
+
+
     def continuous_update_weights(self, replay_buffer, shared_storage):
         # Wait for the replay buffer to be filled
         while ray.get(shared_storage.get_info.remote("num_played_games")) < 1:
@@ -74,14 +100,17 @@ class Trainer:
             index_batch, batch = ray.get(next_batch)
             next_batch = replay_buffer.get_batch.remote()
             self.update_lr()
+            
             (
                 priorities,
                 total_loss,
                 value_loss,
                 reward_loss,
+                terminal_loss,
                 policy_loss,
+                reconstruction_loss,
                 kl_loss,
-            ) = self.update_weights(batch)
+            ) = self.update_weights(batch, shared_storage)
 
             if self.config.PER:
                 # Save new priorities in the replay buffer (See https://arxiv.org/abs/1803.00933)
@@ -99,6 +128,9 @@ class Trainer:
                 )
                 if self.config.save_model:
                     shared_storage.save_checkpoint.remote()
+
+            self.save_batch_stats(batch, shared_storage)
+
             shared_storage.set_info.remote(
                 {
                     "training_step": self.training_step,
@@ -107,6 +139,8 @@ class Trainer:
                     "value_loss": value_loss,
                     "reward_loss": reward_loss,
                     "policy_loss": policy_loss,
+                    "terminal_loss": terminal_loss,
+                    "reconstruction_loss": reconstruction_loss,
                     "kl_loss": kl_loss,
                 }
             )
@@ -126,7 +160,7 @@ class Trainer:
                 ):
                     time.sleep(0.5)
 
-    def update_weights(self, batch):
+    def update_weights(self, batch, shared_storage=None):
         """
         Perform one training step.
         """
@@ -138,6 +172,8 @@ class Trainer:
             target_reward,
             target_policy,
             weight_batch,
+            target_terminal,
+            target_reconstruction,
             gradient_scale_batch,
         ) = batch
 
@@ -161,12 +197,16 @@ class Trainer:
         target_value = torch.tensor(target_value).float().to(device)
         target_reward = torch.tensor(target_reward).float().to(device)
         target_policy = torch.tensor(target_policy).float().to(device)
+        target_terminal = torch.tensor(target_terminal).float().to(device)
+        target_reconstruction = torch.tensor(target_reconstruction).float().to(device)
         gradient_scale_batch = torch.tensor(gradient_scale_batch).float().to(device)
         # observation_batch: batch, channels, height, width
         # action_batch: batch, num_unroll_steps+1, 1 (unsqueeze)
         # target_value: batch, num_unroll_steps+1
         # target_reward: batch, num_unroll_steps+1
         # target_policy: batch, num_unroll_steps+1, len(action_space)
+        # target_terminal: batch, num_unroll_steps+1
+        # target_reconstruction: batch, num_unroll_steps+1, channels, width, height
         # gradient_scale_batch: batch, num_unroll_steps+1
 
         target_value = models.scalar_to_support(target_value, self.config.support_size)
@@ -176,18 +216,14 @@ class Trainer:
         # target_value: batch, num_unroll_steps+1, 2*support_size+1
         # target_reward: batch, num_unroll_steps+1, 2*support_size+1
 
-        # NOTE: just debugging, don't mind me
-        # print(f'Observation batch shape: {observation_batch.shape}')
-        # print(f'Action batch shape: {action_batch.shape}')
-
         if self.is_stochastic_model:
             ## Generate predictions
-            value, reward, policy_logits, hidden_state = self.model.initial_inference(
+            value, reward, _, policy_logits, _, hidden_state = self.model.initial_inference(
                 observation_batch[:, 0]
             )
 
             hidden_states_from_observation = [hidden_state]
-            predictions = [(value, reward, policy_logits)]
+            predictions = [(value, reward, None, policy_logits, None)]
             # NOTE: this is just to make the indexing work out
             transition_logits = [None]  
 
@@ -218,40 +254,46 @@ class Trainer:
                 )
                 # Scale the gradient at the start of the dynamics function (See paper appendix Training)
                 hidden_state.register_hook(lambda grad: grad * 0.5)
-                predictions.append((value, reward, policy_logits))
+                predictions.append((value, reward, None, policy_logits, None))
                 transition_logits.append((transition_logits_post, transition_logits_prior))
         else:
             ## Generate predictions
-            value, reward, policy_logits, hidden_state = self.model.initial_inference(
+            value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = self.model.initial_inference(
                 observation_batch
             )
-
-            predictions = [(value, reward, policy_logits)]
+            predictions = [(value, reward, terminal_logits, policy_logits, reconstruction)]
             for i in range(1, action_batch.shape[1]):
-                value, reward, policy_logits, hidden_state = self.model.recurrent_inference(
-                    hidden_state, action_batch[:, i]
+                value, reward, terminal_logits, policy_logits, reconstruction, hidden_state = (
+                    self.model.recurrent_inference(hidden_state, action_batch[:, i])
                 )
                 # Scale the gradient at the start of the dynamics function (See paper appendix Training)
-                hidden_state.register_hook(lambda grad: grad * 0.5)
-                predictions.append((value, reward, policy_logits))
-        # predictions: num_unroll_steps+1, 3, batch, 2*support_size+1 | 2*support_size+1 | 9 (according to the 2nd dim)
+                if not (hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics):
+                    hidden_state.register_hook(lambda grad: grad * 0.5)
+                predictions.append((value, reward, terminal_logits, policy_logits, reconstruction))
+            # predictions: num_unroll_steps+1, 3, batch, 2*support_size+1 | 2*support_size+1 | 9 (according to the 2nd dim)
 
         ## Compute losses
-        value_loss, reward_loss, policy_loss = (0, 0, 0)
         kl_loss = 0.
-        value, reward, policy_logits = predictions[0]
+        value_loss, reward_loss, terminal_loss, policy_loss, reconstruction_loss = (0, 0, 0, 0, 0)
+        value, reward, terminal_logits, policy_logits, reconstruction = predictions[0]
+
         # Ignore reward loss for the first batch step
-        current_value_loss, _, current_policy_loss = self.loss_function(
+        current_value_loss, _, _, current_policy_loss, current_reconstruction_loss = self.loss_function(
             value.squeeze(-1),
             reward.squeeze(-1),
+            terminal_logits,
             policy_logits,
+            reconstruction,
             target_value[:, 0],
             target_reward[:, 0],
+            target_terminal[:, 0],
             target_policy[:, 0],
+            target_reconstruction[:, 0]
         )
         # NOTE: there's no KL loss for the first timestep
         value_loss += current_value_loss
         policy_loss += current_policy_loss
+        reconstruction_loss += current_reconstruction_loss
         # Compute priorities for the prioritized replay (See paper appendix Training)
         pred_value_scalar = (
             models.support_to_scalar(value, self.config.support_size)
@@ -266,30 +308,60 @@ class Trainer:
         )
 
         for i in range(1, len(predictions)):
-            value, reward, policy_logits = predictions[i]
+            value, reward, terminal_logits, policy_logits, reconstruction = predictions[i]
             (
                 current_value_loss,
                 current_reward_loss,
+                current_terminal_loss,
                 current_policy_loss,
+                current_reconstruction_loss,
             ) = self.loss_function(
                 value.squeeze(-1),
                 reward.squeeze(-1),
+                terminal_logits,
                 policy_logits,
+                reconstruction,
                 target_value[:, i],
                 target_reward[:, i],
+                target_terminal[:, i],
                 target_policy[:, i],
+                target_reconstruction[:, i]
             )
 
             # Scale gradient by the number of unroll steps (See paper appendix Training)
-            current_value_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_reward_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
-            current_policy_loss.register_hook(
-                lambda grad: grad / gradient_scale_batch[:, i]
-            )
+            if not (hasattr(self.config, "freeze_dynamics") and self.config.freeze_dynamics):
+                current_value_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_reward_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_policy_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                if terminal_logits is not None:
+                    current_terminal_loss.register_hook(
+                        lambda grad: grad / gradient_scale_batch[:, i]
+                    )
+                if reconstruction is not None:
+                    current_reconstruction_loss.register_hook(
+                        lambda grad: grad / gradient_scale_batch[:, i]
+                    )
+            else:
+                current_value_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+                current_policy_loss.register_hook(
+                    lambda grad: grad / gradient_scale_batch[:, i]
+                )
+
+            # ignore losses for terminal states
+            if hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states:
+                current_value_loss = current_value_loss * (1 - target_terminal[:, i])  # don't predict value of the first terminal state
+                current_reward_loss = current_reward_loss * (1 - target_terminal[:, i - 1])  # predict reward at the first terminal state
+                current_terminal_loss = current_terminal_loss * (1 - target_terminal[:, i - 1])  # predict terminal at the first terminal state
+                current_policy_loss = current_policy_loss * (1 - target_terminal[:, i])  # don't predict policy at first terminal state
+                current_reconstruction_loss = current_reconstruction_loss * (1 - target_terminal[:, i - 1])  # prediction reconstruction at first terminal state
 
             if self.is_stochastic_model:
                 # TODO: compute KL divergence loss between the posterior transition logits and prior transition logits
@@ -300,7 +372,9 @@ class Trainer:
 
             value_loss += current_value_loss
             reward_loss += current_reward_loss
+            terminal_loss += current_terminal_loss
             policy_loss += current_policy_loss
+            reconstruction_loss += current_reconstruction_loss
 
             # Compute priorities for the prioritized replay (See paper appendix Training)
             pred_value_scalar = (
@@ -316,7 +390,13 @@ class Trainer:
             )
 
         # Scale the value loss, paper recommends by 0.25 (See paper appendix Reanalyze)
-        loss = value_loss * self.config.value_loss_weight + self.config.reward_loss_weight * reward_loss + policy_loss
+        loss = (
+            value_loss * self.config.value_loss_weight
+            + reward_loss * self.config.reward_loss_weight
+            + terminal_loss * getattr(self.config, "terminal_loss_weight", 0.)
+            + policy_loss * getattr(self.config, "policy_loss_weight", 1.)
+            + reconstruction_loss * getattr(self.config, "reconstruction_loss_weight", 0.)
+        )
         if self.config.PER:
             # Correct PER bias by using importance-sampling (IS) weights
             loss *= weight_batch
@@ -336,10 +416,12 @@ class Trainer:
             priorities,
             # For log purpose
             loss.item(),
-            value_loss.mean().item(),
-            reward_loss.mean().item(),
-            policy_loss.mean().item(),
-            kl_loss.mean().item(),
+            value_loss.mean().item() if torch.is_tensor(value_loss) else 0.,
+            reward_loss.mean().item() if torch.is_tensor(reward_loss) else 0.,
+            terminal_loss.mean().item() if torch.is_tensor(terminal_loss) else 0.,
+            policy_loss.mean().item() if torch.is_tensor(policy_loss) else 0.,
+            reconstruction_loss.mean().item() if torch.is_tensor(reconstruction_loss) else 0.,
+            kl_loss.mean().item() if torch.is_tensor(kl_loss) else 0.
         )
 
     def update_lr(self):
@@ -356,10 +438,14 @@ class Trainer:
     def loss_function(
         value,
         reward,
+        terminal_logits,
         policy_logits,
+        reconstruction,
         target_value,
         target_reward,
+        target_terminal,
         target_policy,
+        target_reconstruction,
     ):
         # Cross-entropy seems to have a better convergence than MSE
         value_loss = (-target_value * torch.nn.LogSoftmax(dim=1)(value)).sum(1)
@@ -367,7 +453,20 @@ class Trainer:
         policy_loss = (-target_policy * torch.nn.LogSoftmax(dim=1)(policy_logits)).sum(
             1
         )
-        return value_loss, reward_loss, policy_loss
+
+        if terminal_logits is not None:
+            terminal_loss = torch.nn.functional.binary_cross_entropy_with_logits(terminal_logits, target_terminal, reduction="none")
+        else:
+            terminal_loss = torch.zeros_like(policy_loss)
+
+        if reconstruction is not None:
+            reconstruction_loss = torch.nn.functional.mse_loss(reconstruction, target_reconstruction, reduction="none")
+            reconstruction_loss = torch.mean(reconstruction_loss.view(reconstruction_loss.size(0), -1), dim=-1)
+        else:
+            reconstruction_loss = torch.zeros_like(policy_loss)
+
+        return value_loss, reward_loss, terminal_loss, policy_loss, reconstruction_loss
+
 
 def kl_loss_criterion(transition_logits_post, transition_logits_prior):
     post_dist = Categorical(logits=transition_logits_post)

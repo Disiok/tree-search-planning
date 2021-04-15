@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=16
+#SBATCH -J muzero
+#SBATCH --mem=40GB                          # Job Memory.
+#SBATCH -p t4v2
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -o /h/kelvin/exps/%J.out             # Where to save the output.
+#SBATCH --mail-user=kelvinwong@cs.toronto.edu
+#SBATCH --mail-type=ALL
+#SBATCH --array=0-4                           # Array range
+
+echo Running on $(hostname)
+source /h/kelvin/.bashrc
+. /h/kelvin/envs/cuda10.env
+conda activate tsmp-cuda10
+
+export RAY_TEMP_DIR="/h/kelvin/scratch"
+
+cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
+
+# array of environments
+A=("cross_merge_env"
+   "cross_merge_env_az"
+   "cross_merge_env_recon"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask_pretrain"
+)
+
+python -u muzero_interactive.py "${A[$SLURM_ARRAY_TASK_ID]}"
+

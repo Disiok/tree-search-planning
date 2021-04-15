@@ -1,6 +1,8 @@
+import copy
 import math
 import time
 
+import gym
 import numpy
 import ray
 import torch
@@ -16,7 +18,11 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed):
         self.config = config
-        self.game = Game(seed)
+
+        if hasattr(config, "cfg_file"):
+            self.game = Game(seed=seed, cfg_file=config.cfg_file)
+        else:
+            self.game = Game(seed=seed)
 
         # Fix random generator seed
         numpy.random.seed(seed)
@@ -48,7 +54,6 @@ class SelfPlay:
                     "self",
                     0,
                 )
-
                 replay_buffer.save_game.remote(game_history, shared_storage)
 
             else:
@@ -145,13 +150,31 @@ class SelfPlay:
 
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
-                    root, mcts_info = MCTS(self.config).run(
-                        self.model,
-                        stacked_observations,
-                        self.game.legal_actions(),
-                        self.game.to_play(),
-                        True,
-                    )
+                    if hasattr(self.config, "mcts_pretrain") and self.config.mcts_pretrain:
+                        root, mcts_info = VMCTS(self.config).run(
+                            self.game,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+                    elif hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                        root, mcts_info = AZMCTS(self.config).run(
+                            self.model,
+                            self.game,
+                            game_history,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+                    else:
+                        root, mcts_info = MCTS(self.config).run(
+                            self.model,
+                            stacked_observations,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                        )
+
                     action = self.select_action(
                         root,
                         temperature
@@ -167,11 +190,11 @@ class SelfPlay:
                         )
                 else:
                     action, root = self.select_opponent_action(
-                        opponent, stacked_observations
+                        opponent, stacked_observations, game_history
                     )
 
                 observation, reward, done = self.game.step(action)
-
+        
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
                     self.game.render()
@@ -186,6 +209,10 @@ class SelfPlay:
                 game_history.observation_history.append(observation)
                 game_history.reward_history.append(reward)
                 game_history.to_play_history.append(self.game.to_play())
+                # NOTE(suo): keep track of how many times we interacted with the real environment
+                #            mcts_info['n_env_interactions'] is for environment interactions during MCTS for AlphaZero
+                #            extra + 1 for stepping with the final selected action
+                game_history.n_env_interactions_history.append(mcts_info['n_env_interactions'] + 1)
 
         if save_gif:
             self.game.save_gif()
@@ -195,18 +222,35 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations):
+    def select_opponent_action(self, opponent, stacked_observations, game_history):
         """
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
-            root, mcts_info = MCTS(self.config).run(
-                self.model,
-                stacked_observations,
-                self.game.legal_actions(),
-                self.game.to_play(),
-                True,
-            )
+            if hasattr(self.config, "mcts_pretrain") and self.config.mcts_pretrain:
+                root, mcts_info = VMCTS(self.config).run(
+                    self.game,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
+            elif hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                root, mcts_info = AZMCTS(self.config).run(
+                    self.model,
+                    self.game,
+                    game_history,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
+            else:
+                root, mcts_info = MCTS(self.config).run(
+                    self.model,
+                    stacked_observations,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
             print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
             print(
@@ -275,6 +319,8 @@ class MCTS:
         to_play,
         add_exploration_noise,
         override_root_with=None,
+        policy_only=False,
+        uniform_policy=False,
     ):
         """
         At the root of the search tree we use the representation function to obtain a
@@ -296,7 +342,9 @@ class MCTS:
             (
                 root_predicted_value,
                 reward,
+                _,
                 policy_logits,
+                _,
                 hidden_state,
             ) = model.initial_inference(observation)
             root_predicted_value = models.support_to_scalar(
@@ -309,6 +357,10 @@ class MCTS:
             assert set(legal_actions).issubset(
                 set(self.config.action_space)
             ), "Legal actions should be a subset of the action space."
+
+            if uniform_policy:
+                policy_logits.zero_()
+
             root.expand(
                 legal_actions,
                 to_play,
@@ -326,7 +378,8 @@ class MCTS:
         min_max_stats = MinMaxStats()
 
         max_tree_depth = 0
-        for _ in range(self.config.num_simulations):
+        num_simulations = 0 if policy_only else self.config.num_simulations 
+        for _ in range(num_simulations):
             virtual_to_play = to_play
             node = root
             search_path = [node]
@@ -346,27 +399,37 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            value, reward, policy_logits, hidden_state = model.recurrent_inference(
+            value, reward, terminal, policy_logits, reconstruction, hidden_state = model.recurrent_inference(
                 parent.hidden_state,
                 torch.tensor([[action]]).to(parent.hidden_state.device),
             )
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
-            node.expand(
-                self.config.action_space,
-                virtual_to_play,
-                reward,
-                policy_logits,
-                hidden_state,
-            )
+            is_terminal = terminal.item() >= 0.  # hard threshold to determine terminal state
 
-            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+            if uniform_policy:
+                policy_logits.zero_()
 
-            max_tree_depth = max(max_tree_depth, current_tree_depth)
+            # only expand node if we're not at a terminal state
+            # or if we don't actually use the is_terminal prediction
+            if is_terminal and hasattr(self.config, "mask_absorbing_states") and self.config.mask_absorbing_states:
+                self.backpropagate(search_path, 0., virtual_to_play, min_max_stats)
+                max_tree_depth = max(max_tree_depth, current_tree_depth)
+            else:
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,
+                    policy_logits,
+                    hidden_state,
+                )
+                self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+                max_tree_depth = max(max_tree_depth, current_tree_depth)
 
         extra_info = {
             "max_tree_depth": max_tree_depth,
             "root_predicted_value": root_predicted_value,
+            "n_env_interactions": 0  # MuZero does not interact with the environment during MCTS
         }
         return root, extra_info
 
@@ -502,6 +565,7 @@ class GameHistory:
         # For PER
         self.priorities = None
         self.game_priority = None
+        self.n_env_interactions_history = []
 
     def store_search_statistics(self, root, action_space):
         # Turn visit count from root into a policy
@@ -509,7 +573,7 @@ class GameHistory:
             sum_visits = sum(child.visit_count for child in root.children.values())
             self.child_visits.append(
                 [
-                    root.children[a].visit_count / sum_visits
+                    root.children[a].visit_count / max(sum_visits, 1)
                     if a in root.children
                     else 0
                     for a in action_space
@@ -524,6 +588,9 @@ class GameHistory:
         """
         Generate a new observation with the observation at the index position
         and num_stacked_observations past observations and actions stacked.
+
+        NOTE(kwong): This code is duplicated below. But we'll leave it here so
+        that we don't introduce new bugs to the existing MuZero implementation.
         """
         # Convert to positive index
         index = index % len(self.observation_history)
@@ -557,6 +624,40 @@ class GameHistory:
         return stacked_observations
 
 
+def _get_stacked_observations(observations, actions, index, num_stacked_observations):
+    # Convert to positive index
+    index = index % len(observations)
+
+    stacked_observations = observations[index].copy()
+    for past_observation_index in reversed(
+        range(index - num_stacked_observations, index)
+    ):
+        if 0 <= past_observation_index:
+            previous_observation = numpy.concatenate(
+                (
+                    observations[past_observation_index],
+                    [
+                        numpy.ones_like(stacked_observations[0])
+                        * actions[past_observation_index + 1]
+                    ],
+                )
+            )
+        else:
+            previous_observation = numpy.concatenate(
+                (
+                    numpy.zeros_like(observations[index]),
+                    [numpy.zeros_like(stacked_observations[0])],
+                )
+            )
+
+        stacked_observations = numpy.concatenate(
+            (stacked_observations, previous_observation)
+        )
+
+    return stacked_observations
+
+
+
 class MinMaxStats:
     """
     A class that holds the min-max values of the tree.
@@ -575,3 +676,283 @@ class MinMaxStats:
             # We normalize only when we have set the maximum and minimum values
             return (value - self.minimum) / (self.maximum - self.minimum)
         return value
+
+
+def _safe_deepcopy_env(obj):
+    """Return a deepcopy of the environmnet, but without copying its viewer."""
+    cls = obj.__class__
+    result = cls.__new__(cls)
+    memo = {id(obj): result}
+    for k, v in obj.__dict__.items():
+        if k not in ['viewer', 'automatic_rendering_callback', 'automatic_record_callback', 'grid_render']:
+            if isinstance(v, gym.Env):
+                setattr(result, k, _safe_deepcopy_env(v))
+            else:
+                setattr(result, k, copy.deepcopy(v, memo=memo))
+        else:
+            setattr(result, k, None)
+    return result
+
+
+class AZMCTS(MCTS):
+    r"""MCTS algorithm adapted to AlphaZero.
+    
+    NOTE(kwong): This class works for HighwayEnv only.
+    """
+
+    def run(
+        self,
+        model,
+        game,
+        game_history,
+        legal_actions,
+        to_play,
+        add_exploration_noise,
+        override_root_with=None,
+        policy_only=False,
+        uniform_policy=False,
+    ):
+        r"""Run MCTS for a number of simulations."""
+        n_env_interactions = 0
+        if override_root_with:
+            root = override_root_with
+            root_predicted_value = None
+        else:
+            root = Node(0)
+            observation = _get_stacked_observations(
+                game_history.observation_history,
+                game_history.action_history,
+                -1,
+                self.config.stacked_observations
+            )
+            observation = (
+                torch.tensor(observation)
+                .float()
+                .unsqueeze(0)
+                .to(next(model.parameters()).device)
+            )
+            (
+                _,
+                _,
+                _,
+                policy_logits,
+                _,
+                _
+            ) = model.initial_inference(observation)
+            assert (
+                legal_actions
+            ), f"Legal actions should not be an empty array. Got {legal_actions}."
+            assert set(legal_actions).issubset(
+                set(self.config.action_space)
+            ), "Legal actions should be a subset of the action space."
+
+            if uniform_policy:
+                policy_logits.zero_()
+
+            hidden_state = (
+                game.env.simplify(),  # NOTE(kwong): This works for highway-env only.
+                game_history.observation_history[-1],
+                game_history.action_history[-1],
+                False
+            )
+            root.expand(
+                legal_actions,
+                to_play,
+                0.,  # no rewards at the root node
+                policy_logits,
+                hidden_state,  # hidden state of the game
+            )
+
+        if add_exploration_noise:
+            root.add_exploration_noise(
+                dirichlet_alpha=self.config.root_dirichlet_alpha,
+                exploration_fraction=self.config.root_exploration_fraction,
+            )
+
+        min_max_stats = MinMaxStats()
+
+        max_tree_depth = 0
+        num_simulations = 0 if policy_only else self.config.num_simulations
+        for _ in range(num_simulations):
+            node = root
+
+            terminal = False
+            search_path = [node]
+            current_tree_depth = 0
+            virtual_to_play = to_play
+
+            while node.expanded() and not terminal:
+                current_tree_depth += 1
+                action, node = self.select_child(node, min_max_stats)
+                if node.expanded():
+                    _, _, _, terminal = node.hidden_state
+                search_path.append(node)
+
+                # Players play turn by turn
+                if virtual_to_play + 1 < len(self.config.players):
+                    virtual_to_play = self.config.players[virtual_to_play + 1]
+                else:
+                    virtual_to_play = self.config.players[0]
+
+            if not terminal:
+                parent_state, _, _, _ = search_path[-2].hidden_state
+                parent_state_copy = _safe_deepcopy_env(parent_state)
+                observation, reward, terminal, _ = parent_state_copy.step(action)
+                next_state = parent_state_copy  # changed due to step above
+                n_env_interactions += 1
+                next_hidden_state = (next_state, observation, action, terminal)
+
+                # first node in search_path (root) is already in observation_history
+                # last node in search_path (current node) is not expanded yet
+                observation = _get_stacked_observations(
+                    game_history.observation_history + [n.hidden_state[1] for n in search_path[1:-1]] + [observation],
+                    game_history.action_history + [n.hidden_state[2] for n in search_path[1:-1]] + [action],
+                    -1,
+                    self.config.stacked_observations
+                )
+                observation = (
+                    torch.tensor(observation)
+                    .float()
+                    .unsqueeze(0)
+                    .to(next(model.parameters()).device)
+                )
+                value, _, _, policy_logits, _, _ = model.initial_inference(observation)
+                value = models.support_to_scalar(value, self.config.support_size).item()
+
+                if uniform_policy:
+                    policy_logits.zero_()
+
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,  # reward of action leading to this node
+                    policy_logits,
+                    next_hidden_state,  # new hidden state
+                )
+            else:
+                value = 0.  # terminal states have no value
+
+            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+            max_tree_depth = max(max_tree_depth, current_tree_depth)
+
+        extra_info = {
+            "max_tree_depth": max_tree_depth,
+            "root_predicted_value": None,
+            "n_env_interactions": n_env_interactions,
+        }
+        return root, extra_info
+
+
+class VMCTS(MCTS):
+    r"""Vanilla MCTS.
+
+    NOTE(kwong): This class works for HighwayEnv only.
+    """
+
+    def run(
+        self,
+        game,
+        legal_actions,
+        to_play,
+        add_exploration_noise,
+        override_root_with=None,
+    ):
+        r"""Run MCTS for a number of simulations."""
+        n_env_interactions = 0
+        if override_root_with:
+            root = override_root_with
+            root_predicted_value = None
+        else:
+            root = Node(0)
+            hidden_state = (game.env.simplify(), False)
+            policy_logits = torch.zeros((1, len(self.config.action_space)))
+            root.expand(
+                legal_actions,
+                to_play,
+                0.,  # no rewards at the root
+                policy_logits,
+                hidden_state,
+            )
+
+        if add_exploration_noise:
+            root.add_exploration_noise(
+                dirichlet_alpha=self.config.root_dirichlet_alpha,
+                exploration_fraction=self.config.root_exploration_fraction,
+            )
+
+        min_max_stats = MinMaxStats()
+
+        max_tree_depth = 0
+        for _ in range(self.config.num_simulations):
+            node = root
+
+            terminal = False
+            search_path = [node]
+            current_tree_depth = 0
+            virtual_to_play = to_play
+
+            while node.expanded() and not terminal:
+                current_tree_depth += 1
+                action, node = self.select_child(node, min_max_stats)
+                if node.expanded():
+                    _, terminal = node.hidden_state
+                search_path.append(node)
+
+                # Players play turn by turn
+                if virtual_to_play + 1 < len(self.config.players):
+                    virtual_to_play = self.config.players[virtual_to_play + 1]
+                else:
+                    virtual_to_play = self.config.players[0]
+
+            if not terminal:
+                parent_state, _ = search_path[-2].hidden_state
+                parent_state_copy = _safe_deepcopy_env(parent_state)
+                observation, reward, terminal, _ = parent_state_copy.step(action)
+                next_state = parent_state_copy  # changed due to step above
+                n_env_interactions += 1
+                next_hidden_state = (next_state, terminal)
+
+                policy_logits = torch.zeros((1, len(self.config.action_space)))
+                value, more_env_interactions = estimate_value_via_rollout(next_state, self.config)
+                n_env_interactions += more_env_interactions
+
+                node.expand(
+                    self.config.action_space,
+                    virtual_to_play,
+                    reward,  # reward of action leading to this node
+                    policy_logits,
+                    next_hidden_state,  # new hidden state
+                )
+            else:
+                value = 0.  # terminal states have no value
+
+            self.backpropagate(search_path, value, virtual_to_play, min_max_stats)
+            max_tree_depth = max(max_tree_depth, current_tree_depth)
+
+        extra_info = {
+            "max_tree_depth": max_tree_depth,
+            "root_predicted_value": None,
+            "n_env_interactions": n_env_interactions,
+        }
+        return root, extra_info
+
+
+def estimate_value_via_rollout(state, config):
+    if config.num_rollout_steps is not None and config.num_rollout_steps == 0:
+        return 0.0, 0  # don't copy environment if not necessary
+
+    total_reward = 0.0
+    num_env_interactions = 0
+    state = _safe_deepcopy_env(state)
+
+    step = 0
+    while config.num_rollout_steps is None or step < config.num_rollout_steps:
+        action = numpy.random.choice(config.action_space)
+        _, reward, terminal, _ = state.step(action)
+        num_env_interactions += 1
+        total_reward += config.discount ** step * reward
+        step += 1
+        if terminal:
+            break
+
+    return total_reward, num_env_interactions

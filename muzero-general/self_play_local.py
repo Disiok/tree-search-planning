@@ -9,7 +9,7 @@ import ray
 import torch
 
 import models
-from self_play import MCTS, Node, GameHistory, MinMaxStats
+from self_play import MCTS, Node, GameHistory, MinMaxStats, AZMCTS
 
 
 class SelfPlay:
@@ -21,13 +21,14 @@ class SelfPlay:
 
     def __init__(self, initial_checkpoint, Game, config, seed, directory=None, run_directory=None):
         self.game_cls = Game
+        self.seed = seed
 
         # monitoring
         self.directory = Path(directory or self.default_directory)
         self.run_directory = self.directory / (run_directory or self.default_run_directory)
 
         self.config = config
-        self.game = Game(seed, monitor_path=self.run_directory)
+        self.game = Game(seed=seed, monitor_path=self.run_directory, cfg_file=config.cfg_file)
 
         # Fix random generator seed
         numpy.random.seed(seed)
@@ -39,8 +40,20 @@ class SelfPlay:
         self.model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.model.eval()
 
+    def reset_directory(self):
+        self.run_directory = self.directory / self.default_run_directory
+
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False
+        self,
+        temperature,
+        temperature_threshold,
+        render,
+        opponent,
+        muzero_player,
+        save_gif=False,
+        policy_only=False,
+        uniform_policy=False,
+        num_simulations=None
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -60,6 +73,10 @@ class SelfPlay:
         if save_gif:
             self.game.render_rgb()
 
+        if num_simulations is not None:
+            # HACK(kwong): This modifies the config!
+            self.config.num_simulations = num_simulations
+
         with torch.no_grad():
             while (
                 not done and len(game_history.action_history) <= self.config.max_moves
@@ -77,19 +94,35 @@ class SelfPlay:
 
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
-                    root, mcts_info = MCTS(self.config).run(
-                        self.model,
-                        stacked_observations,
-                        self.game.legal_actions(),
-                        self.game.to_play(),
-                        True,
-                    )
+                    if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                        root, mcts_info = AZMCTS(self.config).run(
+                            self.model,
+                            self.game,
+                            game_history,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                            policy_only=policy_only,
+                            uniform_policy=uniform_policy,
+                        )
+                    else:
+                        root, mcts_info = MCTS(self.config).run(
+                            self.model,
+                            stacked_observations,
+                            self.game.legal_actions(),
+                            self.game.to_play(),
+                            True,
+                            policy_only=policy_only,
+                            uniform_policy=uniform_policy,
+                        )
+
                     action = self.select_action(
                         root,
                         temperature
                         if not temperature_threshold
                         or len(game_history.action_history) < temperature_threshold
                         else 0,
+                        policy_only
                     )
 
                     if render:
@@ -99,7 +132,7 @@ class SelfPlay:
                         )
                 else:
                     action, root = self.select_opponent_action(
-                        opponent, stacked_observations
+                        opponent, stacked_observations, game_history, policy_only
                     )
 
                 observation, reward, done = self.game.step(action)
@@ -127,18 +160,32 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations):
+    def select_opponent_action(self, opponent, stacked_observations, game_history, policy_only, uniform_policy):
         """
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
-            root, mcts_info = MCTS(self.config).run(
-                self.model,
-                stacked_observations,
-                self.game.legal_actions(),
-                self.game.to_play(),
-                True,
-            )
+            if hasattr(self.config, "dynamics_model") and self.config.dynamics_model == "perfect":
+                root, mcts_info = AZMCTS(self.config).run(
+                    self.model,
+                    self.game,
+                    game_history,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                    policy_only=policy_only,
+                    uniform_policy=uniform_policy,
+                )
+            else:
+                root, mcts_info = MCTS(self.config).run(
+                    self.model,
+                    stacked_observations,
+                    self.game.legal_actions(),
+                    self.game.to_play(),
+                    True,
+                    policy_only=policy_only,
+                    uniform_policy=uniform_policy,
+                )
             print(f'Tree depth: {mcts_info["max_tree_depth"]}')
             print(f"Root value for player {self.game.to_play()}: {root.value():.2f}")
             print(
@@ -162,12 +209,17 @@ class SelfPlay:
             )
 
     @staticmethod
-    def select_action(node, temperature):
+    def select_action(node, temperature, policy_only):
         """
         Select action according to the visit count distribution and the temperature.
         The temperature is changed dynamically with the visit_softmax_temperature function
         in the config.
         """
+        if policy_only:
+            actions = [action for action in node.children.keys()]
+            prior = numpy.array([c.prior for c in node.children.values()])
+            return actions[numpy.argmax(prior)]
+
         visit_counts = numpy.array(
             [child.visit_count for child in node.children.values()], dtype="int32"
         )

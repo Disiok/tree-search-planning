@@ -6,7 +6,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.road.lane import LineType, StraightLane, SineLane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.vehicle.behavior import IDMVehicle
+from highway_env.vehicle.behavior import IDM_DICT
 from highway_env.vehicle.objects import Obstacle, Landmark
 
 
@@ -37,6 +37,7 @@ class CrossMergeEnv(AbstractEnv):
             'actor_speed_mean': 20,
             'actor_speed_std': 2,
             'actor_spawn_sep': 15,
+            'veh_type': 'Polite',
             'goal_reward': 1,
             'goal_radius': 3,
         }
@@ -46,7 +47,13 @@ class CrossMergeEnv(AbstractEnv):
 
     def step(self, *args, **kwargs):
         self.prev_ego_pos = np.array(self.vehicle.position)
-        return super().step(*args, **kwargs)
+        #n_crashed = self._other_crashed()
+        #if n_crashed > 0:
+        #    print(f"{n_crashed} othere vehicles crashed")
+        
+        obs, reward, terminal, info = super().step(*args, **kwargs)
+        info["num_goals_reached"] = len(self.reached_goals)
+        return obs, reward, terminal, info
 
     def _reward(self, action: int) -> float:
         """
@@ -67,32 +74,36 @@ class CrossMergeEnv(AbstractEnv):
         # Ego goal
         ego_position = self.vehicle.position
 
-        # TODO need to check if goal was passed 
         for idx, goal in enumerate(self.goals):
+            if goal in self.reached_goals:
+                continue
             goal_position = goal.position
             #dist = np.linalg.norm(ego_position - goal_position)
             dist = point2line_dist(goal_position, self.prev_ego_pos, ego_position)    
         
             if dist < self.config['goal_radius']:
                 reward += self.config['goal_reward']
-                self.goals.pop(idx)
+                self.reached_goals.append(goal)
+                #self.goals.pop(idx)
+                if len(self.reached_goals) > 1:
+                    print("Both goals reached")
                 break
         
         return action_reward[action] + reward
-
-        return utils.lmap(action_reward[action] + reward,
-                          [self.COLLISION_REWARD, self.config['goal_reward']],
-                          [0, 1])
 
     def _is_terminal(self) -> bool:
         """The episode is over when a collision occurs or when the access ramp has been passed."""
         return self.vehicle.crashed or self.vehicle.position[0] > self.road_len
 
+    def _other_crashed(self) -> int:
+        return sum([v.crashed for v in self.road.vehicles])
+
     def _reset(self) -> None:
         self._make_road()
         self._make_vehicles()
         self.prev_ego_pos = None
- 
+        self.reached_goals = []
+
     def _make_straight_roads(self, layout, xl, yl, y0=0, x0=0, width=None):
         """
         Make parallel straight roads
@@ -235,8 +246,10 @@ class CrossMergeEnv(AbstractEnv):
         np.random.shuffle(spawns)
         spawns = spawns[:nv]
 
+        veh_type = IDM_DICT.get(self.config['veh_type'])
+
         for spawn in spawns:
-            veh = IDMVehicle(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
+            veh = veh_type(road, spawn, heading=0, speed=np.random.normal(self.config['actor_speed_mean'], self.config['actor_speed_std']))
             road.vehicles.append(veh)
         
         self.vehicle = ego_vehicle
@@ -246,13 +259,23 @@ class CrossMergeEnv(AbstractEnv):
 
 def point2line_dist(p, v1, v2):
     v1p = p - v1
-    v1v2 = v2 - v1
-    v1v2_norm = np.linalg.norm(v1v2)
-    v1p_proj = np.dot(v1p, v1v2) / v1v2_norm
+    v2p = p - v2
+
+    vp, fp = (v1p, v2p) if np.linalg.norm(v1p) < np.linalg.norm(v2p) else (v2p, v1p)
+    vv = vp - fp
+    pvv = np.dot(vv, vp)
+
+    vv_norm = np.linalg.norm(vv)
+    vp_proj = np.dot(vp, vv) / vv_norm
     
-    hdist = max(0, v1p_proj - v1v2_norm)
-    dist = np.sqrt(-(v1p_proj ** 2) + np.linalg.norm(v1p) ** 2 + hdist ** 2)
-        
+
+    if pvv > 0:
+        dist = np.sqrt(-(vp_proj ** 2) + np.linalg.norm(vp) ** 2)
+    else:
+        dist = np.linalg.norm(vp)
+
+    #print(p, v1, v2)
+    #print('dist', dist)
 
     return  dist
 

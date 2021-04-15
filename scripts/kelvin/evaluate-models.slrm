@@ -1,0 +1,58 @@
+#!/bin/bash
+#SBATCH --ntasks=1                         # Number of workers.
+#SBATCH --cpus-per-task=8
+#SBATCH -J evaluate
+#SBATCH --mem=16GB                          # Job Memory.
+#SBATCH -p t4v2
+#SBATCH --gres=gpu:1                       # Number of GPUs.
+#SBATCH -o /h/kelvin/exps/%A-%a.out             # Where to save the output.
+#SBATCH --mail-user=kelvinwong@cs.toronto.edu
+#SBATCH --mail-type=ALL
+#SBATCH --array=0-14                           # Array range
+
+echo Running on $(hostname)
+source /h/kelvin/.bashrc
+. /h/kelvin/envs/cuda10.env
+conda activate tsmp-cuda10-python3.8
+
+export RAY_TEMP_DIR="/h/kelvin/scratch"
+
+
+# array of environments
+A=("cross_merge_env"
+   "cross_merge_env_recon"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_az"
+   "cross_merge_env_az_learned_dynamics"
+   "highway_env_ttc_flat"
+   "highway_env_ttc_flat_recon"
+   "highway_env_ttc_flat_recon_mask"
+   "highway_env_ttc_flat_az"
+   "highway_env_ttc_flat_az_learned_dynamics"
+   "roundabout_env_ttc_flat"
+   "roundabout_env_ttc_flat_recon"
+   "roundabout_env_ttc_flat_recon_mask"
+   "roundabout_env_ttc_flat_az"
+   "roundabout_env_ttc_flat_az_learned_dynamics"
+)
+
+# array of checkpoints
+C=("/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env/2021-04-14--01-46-48/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon/2021-04-14--02-43-23/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_env_ttc_flat/2021-04-11--19-36-02/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_env_ttc_flat_recon/2021-04-11--00-28-17/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_env_ttc_flat_recon_mask/2021-04-11--00-29-16/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_env_ttc_flat_az/2021-04-12--02-58-31/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_env_ttc_flat_az_learned_dynamics/2021-04-11--20-05-22/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat/2021-04-10--19-10-31/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_recon/2021-04-10--19-10-27/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_recon_mask/2021-04-10--19-10-20/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_az/2021-04-10--19-10-18/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_az_learned_dynamics/2021-04-11--20-05-12/model.checkpoint"
+)
+
+cd /h/kelvin/projects/mcts_planner/tsp/muzero-general
+python benchmark.py --env "${A[$SLURM_ARRAY_TASK_ID]}" --checkpoint_path "${C[$SLURM_ARRAY_TASK_ID]}" --n_episodes "50" --output_path "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/evaluations"

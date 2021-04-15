@@ -1,3 +1,4 @@
+import numpy as np
 import copy
 import importlib
 import math
@@ -27,6 +28,9 @@ import trainer
 import wandb
 
 
+WANDB_INIT = os.environ.get("WANDB_USERNAME", None) is not None
+
+
 class MuZero:
     """
     Main class to manage MuZero.
@@ -45,11 +49,15 @@ class MuZero:
         >>> muzero.test(render=True)
     """
 
-    def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False):
+    def __init__(self, game_name, config=None, split_resources_in=1, remote_logging=False, exp_name=None, env_cfg_key=None):
         # Load the game and the config from the module with the game name
         try:
             game_module = importlib.import_module("games." + game_name)
             self.Game = game_module.Game
+            if env_cfg_key:
+                game_module.cfg.update(game_module.cfgs[env_cfg_key])
+                if exp_name:
+                    game_module.cfg['exp_name'] = exp_name
             self.config = game_module.MuZeroConfig()
         except ModuleNotFoundError as err:
             print(
@@ -65,8 +73,9 @@ class MuZero:
             else:
                 self.config = config
 
-        wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
-        wandb.config.update(self.config)
+        if WANDB_INIT:
+            wandb.init(project='tree-search-planning', entity=os.environ['WANDB_USERNAME'], tags=[game_name])
+            wandb.config.update(self.config)
 
         # Fix random generator seed
         numpy.random.seed(self.config.seed)
@@ -99,12 +108,21 @@ class MuZero:
         if 1 < self.num_gpus:
             self.num_gpus = math.floor(self.num_gpus)
 
+        '''
+        print('Initializing wandb')
+        wandb.init(
+            project='tsmp',
+            entity="a532de18b85163ddb064becddfb8443743192480",#plff',
+            experiment_name = '_'.join(self.config.results_path.split('/')[-2:])
+        )
+        '''
+
         print('Initializing Ray')
         ray.init(
             _temp_dir=os.environ['RAY_TEMP_DIR'],
             num_gpus=total_gpus,
             ignore_reinit_error=True,
-            object_store_memory   =10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
+            object_store_memory=10000000000,   # Using 10 GB so it can be in /dev/shm at Vector
         )
 
         # Checkpoint and replay buffer used to initialize workers
@@ -121,14 +139,26 @@ class MuZero:
             "total_loss": 0,
             "value_loss": 0,
             "reward_loss": 0,
+            "terminal_loss": 0,
             "policy_loss": 0,
+            "reconstruction_loss": 0,
             "kl_loss": 0,
             "num_played_games": 0,
             "num_played_steps": 0,
+            "n_env_interactions": 0,
             "num_reanalysed_games": 0,
             "terminate": False,
+            "visit_dist_entropy": 0,
+            "best_return": 0,
+            "policy_ent": 0,
+            'avg_visit_dist': np.zeros(5),
         }
         self.replay_buffer = {}
+
+        self.load_model(
+            os.path.join(self.config.results_path, 'model.checkpoint'),
+            os.path.join(self.config.results_path, 'replay_buffer.pkl'),
+        )
 
         # NOTE(sergio): I am a bit confused with the purpose of CPUActor.
         #               It looks like it is not used anywhere else in the codebase, and the object ref is lost after this point
@@ -257,7 +287,7 @@ class MuZero:
                 self.logging_loop(
                     num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
                 )
-    
+
     @ray.remote
     def remote_logging_loop(self, num_gpus):
         self.logging_loop(num_gpus)
@@ -330,17 +360,29 @@ class MuZero:
             "total_loss",
             "value_loss",
             "reward_loss",
+            "terminal_loss",
             "policy_loss",
+            "reconstruction_loss",
             "kl_loss",
             "num_played_games",
             "num_played_steps",
+            "n_env_interactions",
             "num_reanalysed_games",
+            "avg_visit_dist",
+            "visit_dist_entropy",
+            "policy_ent",
+            "best_return",
         ]
         info = ray.get(self.shared_storage_worker.get_info.remote(keys))
         try:
             while info["training_step"] < self.config.training_steps:
                 info = ray.get(self.shared_storage_worker.get_info.remote(keys))
-                wandb.log(info)
+                if WANDB_INIT:
+                    wandb.log(info)
+                writer.add_scalar(
+                    "0.visit_dist_entropy", info["visit_dist_entropy"], counter
+                )
+
                 writer.add_scalar(
                     "1.Total_reward/1.Total_reward", info["total_reward"], counter,
                 )
@@ -379,30 +421,37 @@ class MuZero:
                 )
                 writer.add_scalar("2.Workers/6.Learning_rate", info["lr"], counter)
                 writer.add_scalar(
+                    "2.Workers/3.Environment_interactions", info["n_env_interactions"], counter
+                )
+                writer.add_scalar(
                     "3.Loss/1.Total_weighted_loss", info["total_loss"], counter
                 )
                 writer.add_scalar("3.Loss/Value_loss", info["value_loss"], counter)
                 writer.add_scalar("3.Loss/Reward_loss", info["reward_loss"], counter)
+                writer.add_scalar("3.Loss/Terminal_loss", info["terminal_loss"], counter)
                 writer.add_scalar("3.Loss/Policy_loss", info["policy_loss"], counter)
+                writer.add_scalar("3.Loss/Reconstruction_loss", info["reconstruction_loss"], counter)
                 writer.add_scalar("3.Loss/KL_loss", info["kl_loss"], counter)
                 print(
-                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}')
+                    f'Last test reward: {info["total_reward"]:.2f}. Training step: {info["training_step"]}/{self.config.training_steps}. Played games: {info["num_played_games"]}. Loss: {info["total_loss"]:.2f}. Terminal Loss: {info["terminal_loss"]:.2f}. Reconstruction Loss: {info["reconstruction_loss"]:.2f}. Policy Loss: {info["policy_loss"]:.2f}. Value Loss: {info["value_loss"]:.2f}. Reward Loss: {info["reward_loss"]:.2f}')
                 counter += 1
 
-                if counter % 1000 == 0 and self.config.save_model:
+                if counter % 500 == 0 and self.config.save_model:
                     # Persist replay buffer to disk
-                    print("\n\nPersisting replay buffer games to disk...")
+                    self.replay_buffer = ray.get(self.replay_buffer_worker.get_buffer.remote())
+                    print(f"\n\nPersisting replay buffer({len(self.replay_buffer)}) games to disk...")
                     pickle.dump(
                         {
                             "buffer": self.replay_buffer,
                             "num_played_games": self.checkpoint["num_played_games"],
                             "num_played_steps": self.checkpoint["num_played_steps"],
+                            "n_env_interactions": self.checkpoint["n_env_interactions"],
                             "num_reanalysed_games": self.checkpoint["num_reanalysed_games"],
                         },
                         open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
                     )
                 time.sleep(5.0)
-                
+
         except KeyboardInterrupt:
             pass
 
@@ -416,10 +465,12 @@ class MuZero:
                     "buffer": self.replay_buffer,
                     "num_played_games": self.checkpoint["num_played_games"],
                     "num_played_steps": self.checkpoint["num_played_steps"],
+                    "n_env_interactions": self.checkpoint["n_env_interactions"],
                     "num_reanalysed_games": self.checkpoint["num_reanalysed_games"],
                 },
                 open(os.path.join(self.config.results_path, "replay_buffer.pkl"), "wb"),
             )
+            print(os.path.join(self.config.results_path, "replay_buffer.pkl"))
 
     def terminate_workers(self):
         """
@@ -443,7 +494,17 @@ class MuZero:
         self.shared_storage_worker = None
 
     def test(
-        self, render=True, opponent=None, muzero_player=None, num_tests=1, num_gpus=0, save_gif=False
+        self,
+        render=True,
+        opponent=None,
+        muzero_player=None,
+        num_tests=1,
+        num_gpus=0,
+        save_gif=False,
+        output_path=None,
+        policy_only=False,
+        uniform_policy=False,
+        num_simulations=None,
     ):
         """
         Test the model in a dedicated thread.
@@ -461,9 +522,9 @@ class MuZero:
             num_tests (int): Number of games to average. Defaults to 1.
 
             num_gpus (int): Number of GPUs to use, 0 forces to use the CPU. Defaults to 0.
-        
+
         Returns:
-            
+
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
@@ -476,10 +537,21 @@ class MuZero:
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")
+            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
             results.append(
-                self_play_worker.play_game(0, 0, render, opponent, muzero_player, save_gif=save_gif)
+                self_play_worker.play_game(
+                    0,
+                    0,
+                    render,
+                    opponent,
+                    muzero_player,
+                    save_gif=save_gif,
+                    policy_only=policy_only,
+                    uniform_policy=uniform_policy,
+                    num_simulations=num_simulations
+                )
             )
-        self_play_worker.close_game()
+            self_play_worker.close_game()
 
         if len(self.config.players) == 1:
             mean_total_reward = numpy.mean([sum(history.reward_history) for history in results])
@@ -494,7 +566,7 @@ class MuZero:
                     for history in results
                 ]
             )
-        
+
         mean_episode_length = numpy.mean([len(history.action_history) - 1 for history in results])
 
         result = {
@@ -517,7 +589,7 @@ class MuZero:
         # Load checkpoint
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
-                self.checkpoint = torch.load(checkpoint_path)
+                self.checkpoint = torch.load(checkpoint_path, map_location="cpu")
                 print(f"\nUsing checkpoint from {checkpoint_path}")
             else:
                 print(f"\nThere is no model saved in {checkpoint_path}.")
@@ -530,6 +602,9 @@ class MuZero:
                 self.replay_buffer = replay_buffer_infos["buffer"]
                 self.checkpoint["num_played_steps"] = replay_buffer_infos[
                     "num_played_steps"
+                ]
+                self.checkpoint["n_env_interactions"] = replay_buffer_infos[
+                    "n_env_interactions"
                 ]
                 self.checkpoint["num_played_games"] = replay_buffer_infos[
                     "num_played_games"
@@ -545,8 +620,15 @@ class MuZero:
                 )
                 self.checkpoint["training_step"] = 0
                 self.checkpoint["num_played_steps"] = 0
+                self.checkpoint["n_env_interactions"] = 0
                 self.checkpoint["num_played_games"] = 0
                 self.checkpoint["num_reanalysed_games"] = 0
+        else:
+            self.checkpoint["training_step"] = 0
+            self.checkpoint["num_played_steps"] = 0
+            self.checkpoint["n_env_interactions"] = 0
+            self.checkpoint["num_played_games"] = 0
+            self.checkpoint["num_reanalysed_games"] = 0
 
     def diagnose_model(self, horizon):
         """

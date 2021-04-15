@@ -6,7 +6,7 @@
 	"actor_density": 0.4,
 	"actor_speed_mean": 25,
 	"actor_speed_std": 3,
-	"actor_spawn_sep": 15,
+	"actor_spawn_sep": 20,
 	"goal_reward": 1,
 	"goal_radius": 2,
     "observation": {
