@@ -108,7 +108,7 @@ class SelfPlay:
         self.close_game()
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False
+        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False, **kwargs
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -296,7 +296,9 @@ class MCTS:
             (
                 root_predicted_value,
                 reward,
+                _,
                 policy_logits,
+                _,
                 hidden_state,
             ) = model.initial_inference(observation)
             root_predicted_value = models.support_to_scalar(

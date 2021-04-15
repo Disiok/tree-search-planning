@@ -528,16 +528,15 @@ class MuZero:
         """
         opponent = opponent if opponent else self.config.opponent
         muzero_player = muzero_player if muzero_player else self.config.muzero_player
-        if hasattr(self.config, 'risk_sensitive') and self.config.risk_sensitive:
-            self_play_worker = self_play_local_risk_sensitive.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
-        elif hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
-            self_play_worker = self_play_local_stochastic.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
-        else:
-            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000))
         results = []
         for i in range(num_tests):
             print(f"Testing {i+1}/{num_tests}")
-            self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
+            if hasattr(self.config, 'risk_sensitive') and self.config.risk_sensitive:
+                self_play_worker = self_play_local_risk_sensitive.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
+            elif hasattr(self.config, 'stochastic_dynamics') and self.config.stochastic_dynamics:
+                self_play_worker = self_play_local_stochastic.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
+            else:
+                self_play_worker = self_play_local.SelfPlay(self.checkpoint, self.Game, self.config, numpy.random.randint(10000), output_path)
             results.append(
                 self_play_worker.play_game(
                     0,

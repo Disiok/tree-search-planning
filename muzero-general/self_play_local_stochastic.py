@@ -40,7 +40,7 @@ class SelfPlay:
         self.model.eval()
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False
+        self, temperature, temperature_threshold, render, opponent, muzero_player, save_gif=False, **kwargs
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.

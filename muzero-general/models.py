@@ -126,7 +126,7 @@ class AbstractNetwork(ABC, torch.nn.Module):
         return dict_to_cpu(self.state_dict())
 
     def set_weights(self, weights):
-        self.load_state_dict(weights)
+        self.load_state_dict(weights, strict=False)
 
 
 ##################################
