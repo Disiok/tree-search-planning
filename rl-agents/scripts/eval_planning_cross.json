@@ -1,0 +1,6 @@
+{
+    "environments": ["configs/CrossMergeEnv/1lane.json"],
+    "agents": [
+        "configs/HighwayEnv/agents/IntervalRobustPlannerAgent/opd.json"
+    ]
+}
