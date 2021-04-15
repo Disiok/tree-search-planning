@@ -10,8 +10,13 @@
 
 date;hostname;pwd
 
+
+source /h/sergio/.bashrc
+
+. /h/sergio/tree-search-planning/project.env
+
+conda activate tree-search-planning-1.7
+
 cd $SLURM_SUBMIT_DIR
-. project.env
-. jupyter.env
 export XDG_RUNTIME_DIR=""
 jupyter notebook --ip 0.0.0.0 --port 8888

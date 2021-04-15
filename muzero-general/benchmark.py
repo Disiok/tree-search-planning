@@ -55,7 +55,7 @@ def evaluate(model, env, checkpoint_path, n_episodes, num_gpus, output_path, pol
         # NOTE(kwong): no need to do so; works with muzero.
         raise NotImplementedError('TODO: Hook up alphazero from Kelvin')
     else: 
-        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py')
+        raise NotImplementedError('TODO: Merge in rl-agent `experiments.py`')
 
     return result
 
