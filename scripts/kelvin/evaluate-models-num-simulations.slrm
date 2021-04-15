@@ -8,7 +8,7 @@
 #SBATCH -o /h/kelvin/exps/%A-%a.out             # Where to save the output.
 #SBATCH --mail-user=kelvinwong@cs.toronto.edu
 #SBATCH --mail-type=ALL
-#SBATCH --array=0-35                           # Array range
+#SBATCH --array=0-54                           # Array range
 
 echo Running on $(hostname)
 source /h/kelvin/.bashrc
@@ -55,6 +55,24 @@ A=("highway_env_ttc_flat_recon_mask"
    "roundabout_env_ttc_flat_az_learned_dynamics"
    "roundabout_env_ttc_flat_az_learned_dynamics"
    "roundabout_env_ttc_flat_az_learned_dynamics"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_recon_mask"
+   "cross_merge_env_az"
+   "cross_merge_env_az"
+   "cross_merge_env_az"
+   "cross_merge_env_az"
+   "cross_merge_env_az"
+   "cross_merge_env_az"
+   "cross_merge_env_az_learned_dynamics"
+   "cross_merge_env_az_learned_dynamics"
+   "cross_merge_env_az_learned_dynamics"
+   "cross_merge_env_az_learned_dynamics"
+   "cross_merge_env_az_learned_dynamics"
+   "cross_merge_env_az_learned_dynamics"
 )
 
 # array of checkpoints
@@ -94,10 +112,32 @@ C=("/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/highway_en
    "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_az_learned_dynamics/2021-04-11--20-05-12/model.checkpoint"
    "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_az_learned_dynamics/2021-04-11--20-05-12/model.checkpoint"
    "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/roundabout_env_ttc_flat_az_learned_dynamics/2021-04-11--20-05-12/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_recon_mask/2021-04-14--01-46-49/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az/2021-04-14--01-46-50/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+   "/scratch/ssd002/home/kelvin/projects/mcts_planner/tsp/checkpoints/cross_merge_env_az_learned_dynamics/2021-04-14--03-54-05/model.checkpoint"
+
 )
 
 # array of number of simulations
 N=(1 10 25 50 100 250
+   1 10 25 50 100 250
+   1 10 25 50 100 250
+   1 10 25 50 100 250
    1 10 25 50 100 250
    1 10 25 50 100 250
    1 10 25 50 100 250
