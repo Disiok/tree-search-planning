@@ -78,7 +78,7 @@ class MuZeroConfig:
         self.num_workers = 12 # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 500  # Maximum number of moves if game is not finished before
-        self.num_simulations = 50  # Number of future moves self-simulated
+        self.num_simulations = 25 # Number of future moves self-simulated
         self.discount = 0.995  # 0.975  # 0.997  # Chronological discount of the reward
         self.temperature_threshold = None  # Number of moves before dropping the temperature given by visit_softmax_temperature_fn to 0 (ie selecting the best action). If None, visit_softmax_temperature_fn is used every time
 
@@ -208,10 +208,8 @@ class Game(AbstractGame):
 
     ENV_NAME = 'cross-merge-v0'
 
-    def __init__(self, cfg_file='', seed=None, monitor_path=None):
-        # self.env = gym.make(self.ENV_NAME)
-        this_dir = os.path.dirname(os.path.abspath(__file__))
-        print(f"Using config {cfg_file}")
+    def __init__(self, seed=None, monitor_path=None, cfg_file=''):
+        this_dir = os.path.dirname(os.path.realpath(__file__))
         self.env = load_environment(os.path.join(this_dir, 'cross_merge_configs', cfg_file))
         
         if monitor_path is not None:

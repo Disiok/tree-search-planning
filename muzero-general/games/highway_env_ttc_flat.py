@@ -158,7 +158,7 @@ class Game(AbstractGame):
 
     ENV_NAME = 'highway-v0'
 
-    def __init__(self, seed=None, monitor_path=None):
+    def __init__(self, seed=None, monitor_path=None, cfg_file=""):
         self.env = gym.make(self.ENV_NAME)
         if monitor_path is not None:
             self.env = MonitorV2(self.env, monitor_path, video_callable=False)

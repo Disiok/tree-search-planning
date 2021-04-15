@@ -151,7 +151,7 @@ class Game(AbstractGame):
     Game wrapper.
     """
 
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, monitor_path=None, cfg_file=""):
         self.env = gym.make('highway-v0')
         self.env.configure(
             {

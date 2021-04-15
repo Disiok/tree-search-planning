@@ -28,7 +28,7 @@ class SelfPlay:
         self.run_directory = self.directory / (run_directory or self.default_run_directory)
 
         self.config = config
-        self.game = Game(seed, monitor_path=self.run_directory)
+        self.game = Game(seed=seed, monitor_path=self.run_directory, cfg_file=config.cfg_file)
 
         # Fix random generator seed
         numpy.random.seed(seed)
